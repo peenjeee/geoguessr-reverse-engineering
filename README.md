@@ -5,7 +5,7 @@ Chrome extension helper untuk GeoGuessr.
 ## Clone
 
 ```bash
-git clone <url-repo>
+git clone https://github.com/peenjeee/geoguessr-reverse-engineering.git
 cd geoguessr-reverse-engineering
 ```
 
@@ -14,6 +14,22 @@ cd geoguessr-reverse-engineering
 - Place exact
 - Place nearby dengan slider range skor
 - Open maps untuk lokasi ronde
+
+## Tampilan
+
+![Popup PNJ GeoGuessr Tools](images/full.png)
+
+### Place exact
+
+![Place exact](images/exact.png)
+
+### Place nearby
+
+![Place nearby](images/nearby.png)
+
+### Open maps
+
+![Open maps](images/map.png)
 
 ## Install
 
