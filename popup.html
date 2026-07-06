@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>PNJ GeoGuessr Tools</title>
+    <style>
+      body {
+        width: 220px;
+        margin: 0;
+        padding: 12px;
+        font: 13px system-ui, sans-serif;
+      }
+
+      button {
+        width: 100%;
+        margin: 0 0 8px;
+        padding: 8px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        background: #fff;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #f3f4f6;
+      }
+
+      #brand {
+        margin-bottom: 10px;
+        color: #111827;
+        font-weight: 600;
+        text-align: center;
+      }
+
+      #status {
+        min-height: 18px;
+        color: #4b5563;
+      }
+
+      #footer {
+        margin-top: 8px;
+        color: #6b7280;
+        font-size: 11px;
+        text-align: center;
+      }
+
+    </style>
+  </head>
+  <body>
+    <div id="brand">PNJ GeoGuessr Tools</div>
+    <button data-place="exact">Place exact</button>
+    <button data-place="nearby">Place nearby</button>
+    <button data-place="maps">Open maps</button>
+    <div id="status"></div>
+    <div id="footer">©2026</div>
+    <script src="popup.js"></script>
+  </body>
+</html>
