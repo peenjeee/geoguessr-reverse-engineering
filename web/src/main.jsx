@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import extensionIcon from "../../icons/icon128.png";
-import exactShot from "../../images/exact.png";
-import fullShot from "../../images/full.png";
-import mapShot from "../../images/map.png";
-import nearbyShot from "../../images/nearby.png";
+import heroImage from "../../images/hero.png";
+import imageOne from "../../images/image1.png";
+import imageTwo from "../../images/image2.png";
+import imageThree from "../../images/image3.png";
 import "./styles.css";
 
 const features = [
   ["Place exact", "Drop the pin on the captured round location."],
   ["Place nearby", "Choose a score range and place close enough."],
-  ["Open maps", "Preview the round location inside the popup."]
+  ["Refresh map", "Preview the round location inside the popup."]
 ];
 
 const repoUrl = "https://github.com/peenjeee/geoguessr-reverse-engineering";
@@ -40,7 +40,7 @@ function App() {
 
   return (
     <main id="top">
-      <section className="hero">
+      <section className="hero" style={{ "--hero-image": `url(${heroImage})` }}>
         <nav className="nav" aria-label="Primary">
           <a className="brand" href="#top" aria-label="PNJ GeoGuessr Tools">
             {brandIcon}
@@ -76,7 +76,7 @@ function App() {
         </div>
 
         <div className="product-shot" aria-label="Extension preview">
-          <img src={fullShot} alt="PNJ GeoGuessr Tools popup preview" />
+          <img src={imageOne} alt="PNJ GeoGuessr Tools popup preview" />
         </div>
       </section>
 
@@ -90,9 +90,9 @@ function App() {
       </section>
 
       <section className="gallery" aria-label="Screenshots">
-        <img src={exactShot} alt="Place exact screenshot" />
-        <img src={nearbyShot} alt="Place nearby screenshot" />
-        <img src={mapShot} alt="Embedded map screenshot" />
+        <img src={imageOne} alt="PNJ GeoGuessr Tools popup screenshot" />
+        <img src={imageTwo} alt="PNJ GeoGuessr Tools range screenshot" />
+        <img src={imageThree} alt="PNJ GeoGuessr Tools map screenshot" />
       </section>
 
       <section id="install" className="install">

@@ -64,6 +64,9 @@ a {
   align-items: center;
   padding: 28px clamp(20px, 6vw, 88px) 64px;
   overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(25, 7, 57, .88) 0%, rgba(44, 13, 103, .74) 48%, rgba(44, 13, 103, .46) 100%),
+    var(--hero-image) center / cover no-repeat;
 }
 
 .hero::before {
@@ -71,8 +74,8 @@ a {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 64% 44%, rgba(87, 255, 202, .24), transparent 23%),
-    radial-gradient(circle at 32% 82%, rgba(123, 214, 74, .22), transparent 18%);
+    radial-gradient(circle at 64% 44%, rgba(87, 255, 202, .18), transparent 23%),
+    radial-gradient(circle at 32% 82%, rgba(123, 214, 74, .16), transparent 18%);
   pointer-events: none;
 }
 

@@ -4,7 +4,7 @@
   "version": "1.0.30",
   "description": "PNJ GeoGuessr Tools.",
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; frame-src https://www.openstreetmap.org https://www.google.com https://maps.google.com;"
+    "extension_pages": "script-src 'self'; object-src 'self'; frame-src https://www.google.com https://maps.google.com;"
   },
   "action": {
     "default_icon": {
@@ -13,7 +13,13 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_popup": "popup.html"
+    "default_title": "PNJ GeoGuessr Tools"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
   },
   "icons": {
     "16": "icons/icon16.png",
@@ -21,7 +27,7 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "scripting", "sidePanel"],
   "content_scripts": [
     {
       "matches": [
@@ -34,20 +40,6 @@
       "js": ["internal.js"],
       "run_at": "document_start",
       "world": "MAIN",
-      "all_frames": true,
-      "match_about_blank": true
-    },
-    {
-      "matches": [
-        "https://geoguessr.com/*",
-        "https://*.geoguessr.com/*",
-        "http://localhost/*",
-        "http://127.0.0.1/*",
-        "file:///*"
-      ],
-      "js": ["external.js"],
-      "run_at": "document_start",
-      "world": "ISOLATED",
       "all_frames": true,
       "match_about_blank": true
     }

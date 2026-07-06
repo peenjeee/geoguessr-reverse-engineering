@@ -20,12 +20,16 @@
         box-sizing: border-box;
       }
 
+      html {
+        height: 100%;
+      }
+
       body {
-        width: 320px;
-        max-height: 600px;
+        width: 100%;
+        height: 100vh;
         margin: 0;
-        padding: 8px;
-        overflow-y: auto;
+        padding: 8px 12px;
+        overflow: hidden;
         background:
           radial-gradient(circle at 16% 12%, rgba(255, 255, 255, .85) 0 1px, transparent 2px),
           radial-gradient(circle at 86% 18%, rgba(255, 255, 255, .7) 0 1px, transparent 2px),
@@ -51,87 +55,41 @@
 
       .panel {
         overflow: hidden;
+        height: 100%;
+        width: min(100%, 430px);
+        margin: 0 auto;
         border: 3px solid #7551c8;
-        border-radius: 20px;
+        border-radius: 22px;
         background: var(--card);
         box-shadow:
           inset 0 0 0 2px var(--outline),
           0 12px 26px rgba(34, 9, 85, .45);
       }
 
-      .hero {
-        position: relative;
-        height: 118px;
-        overflow: hidden;
-        background:
-          radial-gradient(circle at 50% 74%, rgba(87, 255, 202, .95) 0 8%, rgba(55, 199, 226, .72) 9% 18%, transparent 28%),
-          radial-gradient(circle at 25% 86%, #7bd64a 0 7%, transparent 8%),
-          radial-gradient(circle at 76% 88%, #58c73d 0 10%, transparent 11%),
-          linear-gradient(135deg, #5136b8 0%, #4a2e9b 38%, #20173f 100%);
-      }
-
-      .hero::before,
-      .hero::after {
-        content: "";
-        position: absolute;
-        width: 88px;
-        height: 88px;
-        border: 8px solid rgba(255, 255, 255, .76);
-        border-left: 0;
-        border-bottom: 0;
-        transform: rotate(-38deg);
-      }
-
-      .hero::before {
-        top: 12px;
-        left: 18px;
-      }
-
-      .hero::after {
-        top: 16px;
-        right: -18px;
-      }
-
-      .pin {
-        position: absolute;
-        left: 50%;
-        top: 30px;
-        width: 42px;
-        height: 42px;
-        border-radius: 50% 50% 50% 0;
-        background: #ff416d;
-        box-shadow: 0 0 24px rgba(255, 65, 109, .9);
-        transform: translateX(-50%) rotate(-45deg);
-      }
-
-      .pin::after {
-        content: "";
-        position: absolute;
-        inset: 11px;
-        border-radius: 50%;
-        background: #fff;
-      }
-
       .content {
-        padding: 20px 20px 16px;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        padding: 20px clamp(18px, 5vw, 28px) 0;
         background: linear-gradient(180deg, #5b28b4 0%, var(--card-deep) 100%);
       }
 
       #brand {
-        margin: 0 0 16px;
+        margin: 0 0 18px;
         color: #fff;
-        font-size: 24px;
+        font-size: clamp(22px, 6vw, 28px);
         font-style: italic;
         font-weight: 950;
         letter-spacing: 0;
-        text-align: left;
+        text-align: center;
         text-shadow: 0 3px 0 rgba(25, 8, 85, .65);
       }
 
       button {
         width: 100%;
-        min-height: 44px;
-        margin: 0 0 10px;
+        min-height: 52px;
+        margin: 0 0 12px;
         padding: 0 16px;
         border: 0;
         border-radius: 999px;
@@ -153,8 +111,8 @@
       }
 
       .range-card {
-        margin: -2px 0 12px;
-        padding: 12px;
+        margin: 0 0 16px;
+        padding: 14px 16px 16px;
         border: 2px solid rgba(255, 255, 255, .18);
         border-radius: 16px;
         background: rgba(24, 6, 68, .42);
@@ -164,22 +122,76 @@
       .range-title {
         display: flex;
         justify-content: space-between;
-        margin-bottom: 8px;
+        gap: 12px;
+        margin-bottom: 10px;
         color: #fff;
         font-size: 12px;
         text-shadow: 0 2px 0 rgba(30, 8, 92, .55);
         text-transform: uppercase;
       }
 
-      input[type="range"] {
+      .range-slider {
+        --range-left: 90%;
+        --range-right: 98%;
+        position: relative;
+        height: 34px;
+        margin: 8px 0 14px;
+        cursor: pointer;
+      }
+
+      .range-slider::before,
+      .range-slider::after {
+        content: "";
+        position: absolute;
+        top: 13px;
+        height: 8px;
+        border-radius: 999px;
+      }
+
+      .range-slider::before {
+        inset-inline: 0;
+        background: rgba(255, 255, 255, .28);
+      }
+
+      .range-slider::after {
+        left: var(--range-left);
+        right: calc(100% - var(--range-right));
+        background: #ff416d;
+      }
+
+      .range-slider input[type="range"] {
+        position: absolute;
+        inset: 0;
         width: 100%;
-        accent-color: #ff416d;
+        height: 34px;
+        margin: 0;
+        appearance: none;
+        background: transparent;
+        pointer-events: none;
+      }
+
+      .range-slider input[type="range"]::-webkit-slider-runnable-track {
+        height: 8px;
+        background: transparent;
+      }
+
+      .range-slider input[type="range"]::-webkit-slider-thumb {
+        width: 20px;
+        height: 20px;
+        margin-top: -6px;
+        border: 0;
+        border-radius: 50%;
+        appearance: none;
+        background: #ff416d;
+        box-shadow: 0 2px 0 rgba(58, 11, 111, .65);
+        pointer-events: none;
       }
 
       .map-card {
+        flex: 1 1 auto;
+        min-height: 0;
         overflow: hidden;
-        height: 220px;
-        margin: -2px 0 12px;
+        margin: 0;
         border: 2px solid rgba(255, 255, 255, .18);
         border-radius: 16px;
         background: rgba(24, 6, 68, .42);
@@ -198,44 +210,49 @@
       }
 
       #status {
-        min-height: 14px;
+        min-height: 0;
         color: #ffe1ff;
         font-size: 11px;
         text-align: center;
       }
 
-      #footer {
-        margin-top: 6px;
-        color: var(--muted);
-        font-size: 11px;
-        text-align: center;
+      @media (max-width: 360px) {
+        body {
+          padding-inline: 8px;
+        }
+
+        .content {
+          padding-inline: 16px;
+        }
+
+        button {
+          min-height: 48px;
+          font-size: 13px;
+        }
       }
     </style>
   </head>
   <body>
     <div class="panel">
-      <div class="hero">
-        <div class="pin"></div>
-      </div>
       <div class="content">
         <div id="brand">PNJ GeoGuessr Tools</div>
         <button data-place="exact">Place exact</button>
-        <button data-nearby-toggle>Place nearby</button>
-        <div id="nearby-panel" class="range-card" hidden>
+        <div id="nearby-panel" class="range-card">
           <div class="range-title">
             <span>Score range</span>
-            <span id="nearby-value">3000-4500</span>
+            <span id="nearby-value">4500-4900</span>
           </div>
-          <input id="nearby-min" type="range" min="0" max="5000" step="50" value="3000">
-          <input id="nearby-max" type="range" min="0" max="5000" step="50" value="4500">
+          <div id="nearby-slider" class="range-slider">
+            <input id="nearby-min" type="range" min="0" max="5000" step="50" value="4500" aria-label="Minimum score">
+            <input id="nearby-max" type="range" min="0" max="5000" step="50" value="4900" aria-label="Maximum score">
+          </div>
           <button data-place="nearby">Place range</button>
         </div>
-        <button data-map-toggle>Open maps</button>
-        <div id="map-panel" class="map-card" hidden>
+        <button data-map-toggle>Refresh map</button>
+        <div id="map-panel" class="map-card">
           <iframe id="map-frame" title="Round map" loading="lazy"></iframe>
         </div>
         <div id="status"></div>
-        <div id="footer">©2026</div>
       </div>
     </div>
     <script src="popup.js"></script>

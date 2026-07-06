@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_VERSION = "clean-v4";
+  const SCRIPT_VERSION = "clean-v7";
   if (window.__localInjectorInternalVersion === SCRIPT_VERSION) return;
 
   window.__localInjectorInternal = true;
@@ -554,15 +554,25 @@
     const low = Math.min(minScore, maxScore);
     const high = Math.max(minScore, maxScore);
     const targetScore = low + Math.random() * (high - low);
-    // ponytail: approximate world-map scoring; exact score needs per-map scoring config.
-    const distanceKm = targetScore > 0 ? -2000 * Math.log(targetScore / 5000) : 20015;
+    const earthRadiusKm = 6371;
+    const scoreScaleKm = 1492;
+    const distanceKm = targetScore > 0 ? -scoreScaleKm * Math.log(targetScore / 5000) : scoreScaleKm * 10;
     const bearing = Math.random() * Math.PI * 2;
-    const latOffset = (Math.cos(bearing) * distanceKm) / 111;
-    const lngOffset = (Math.sin(bearing) * distanceKm) / (111 * Math.max(0.15, Math.cos((coord.lat * Math.PI) / 180)));
+    const startLat = (coord.lat * Math.PI) / 180;
+    const startLng = (coord.lng * Math.PI) / 180;
+    const angularDistance = distanceKm / earthRadiusKm;
+    const endLat = Math.asin(
+      (Math.sin(startLat) * Math.cos(angularDistance)) +
+        (Math.cos(startLat) * Math.sin(angularDistance) * Math.cos(bearing)),
+    );
+    const endLng = startLng + Math.atan2(
+      Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(startLat),
+      Math.cos(angularDistance) - (Math.sin(startLat) * Math.sin(endLat)),
+    );
 
     return {
-      lat: Math.max(-90, Math.min(90, coord.lat + latOffset)),
-      lng: ((((coord.lng + lngOffset) + 180) % 360) + 360) % 360 - 180,
+      lat: Math.max(-90, Math.min(90, (endLat * 180) / Math.PI)),
+      lng: (((((endLng * 180) / Math.PI) + 180) % 360) + 360) % 360 - 180,
       round: coord.round || null,
     };
   }

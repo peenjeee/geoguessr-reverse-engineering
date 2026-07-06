@@ -13,23 +13,15 @@ cd geoguessr-reverse-engineering
 
 - Place exact
 - Place nearby dengan slider range skor
-- Open maps untuk lokasi ronde
+- Refresh map untuk lokasi ronde
 
 ## Tampilan
 
-![Popup PNJ GeoGuessr Tools](images/full.png)
+![PNJ GeoGuessr Tools popup](images/image1.png)
 
-### Place exact
+![PNJ GeoGuessr Tools range](images/image2.png)
 
-![Place exact](images/exact.png)
-
-### Place nearby
-
-![Place nearby](images/nearby.png)
-
-### Open maps
-
-![Open maps](images/map.png)
+![PNJ GeoGuessr Tools map](images/image3.png)
 
 ## Install
 

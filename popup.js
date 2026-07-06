@@ -1,13 +1,19 @@
 const statusBox = document.getElementById("status");
-const nearbyPanel = document.getElementById("nearby-panel");
+const nearbySlider = document.getElementById("nearby-slider");
 const nearbyMin = document.getElementById("nearby-min");
 const nearbyMax = document.getElementById("nearby-max");
 const nearbyValue = document.getElementById("nearby-value");
 const mapPanel = document.getElementById("map-panel");
 const mapFrame = document.getElementById("map-frame");
 const allowedPage = /^(https?:\/\/((localhost|127\.0\.0\.1)(:\d+)?|([^/]+\.)?geoguessr\.com)\/|file:\/\/)/;
+const targetTabId = Number(new URLSearchParams(location.search).get("targetTabId"));
+let draggedRangeHandle;
 
 async function activeTab() {
+  if (Number.isInteger(targetTabId) && targetTabId > 0) {
+    return chrome.tabs.get(targetTabId);
+  }
+
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab;
 }
@@ -66,23 +72,50 @@ function formatStatus(data) {
 }
 
 function nearbyScoreRange() {
-  const min = Math.max(0, Math.min(5000, Number(nearbyMin.value)));
-  const max = Math.max(0, Math.min(5000, Number(nearbyMax.value)));
-  return { min: Math.min(min, max), max: Math.max(min, max) };
+  let min = Math.max(0, Math.min(5000, Number(nearbyMin?.value || 4500)));
+  let max = Math.max(0, Math.min(5000, Number(nearbyMax?.value || 4900)));
+
+  if (nearbyMin && nearbyMax && min > max) {
+    if (document.activeElement === nearbyMin) max = min;
+    else min = max;
+    nearbyMin.value = min;
+    nearbyMax.value = max;
+  }
+
+  return { min, max };
 }
 
 function updateNearbyValue() {
   const range = nearbyScoreRange();
-  nearbyValue.textContent = `${range.min}-${range.max}`;
+  nearbySlider?.style.setProperty("--range-left", `${range.min / 50}%`);
+  nearbySlider?.style.setProperty("--range-right", `${range.max / 50}%`);
+  if (nearbyValue) nearbyValue.textContent = `${range.min}-${range.max}`;
+}
+
+function scoreFromPointer(event) {
+  const bounds = nearbySlider.getBoundingClientRect();
+  const percent = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+  return Math.round((percent * 5000) / 50) * 50;
+}
+
+function moveRangeHandle(handle, score) {
+  if (handle === nearbyMin) {
+    nearbyMin.value = Math.min(score, Number(nearbyMax.value));
+  } else {
+    nearbyMax.value = Math.max(score, Number(nearbyMin.value));
+  }
+
+  updateNearbyValue();
+}
+
+function nearestRangeHandle(score) {
+  return Math.abs(score - Number(nearbyMin.value)) <= Math.abs(score - Number(nearbyMax.value))
+    ? nearbyMin
+    : nearbyMax;
 }
 
 function mapUrl(lat, lng) {
-  const span = 6;
-  const minLat = Math.max(-85, lat - span);
-  const maxLat = Math.min(85, lat + span);
-  const minLng = Math.max(-180, lng - span);
-  const maxLng = Math.min(180, lng + span);
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${minLng}%2C${minLat}%2C${maxLng}%2C${maxLat}&layer=mapnik&marker=${lat}%2C${lng}`;
+  return `https://maps.google.com/maps?q=${lat},${lng}&z=6&output=embed`;
 }
 
 async function currentRound() {
@@ -141,12 +174,6 @@ async function openMapInPopup() {
 }
 
 document.addEventListener("click", (event) => {
-  if (event.target.closest("[data-nearby-toggle]")) {
-    nearbyPanel.hidden = !nearbyPanel.hidden;
-    statusBox.textContent = "";
-    return;
-  }
-
   if (event.target.closest("[data-map-toggle]")) {
     openMapInPopup().catch((error) => {
       statusBox.textContent = error.message;
@@ -162,5 +189,29 @@ document.addEventListener("click", (event) => {
   });
 });
 
-[nearbyMin, nearbyMax].forEach((input) => input.addEventListener("input", updateNearbyValue));
+[nearbyMin, nearbyMax].filter(Boolean).forEach((input) => input.addEventListener("input", updateNearbyValue));
+
+if (nearbySlider && nearbyMin && nearbyMax) {
+  nearbySlider.addEventListener("pointerdown", (event) => {
+    const score = scoreFromPointer(event);
+    draggedRangeHandle = nearestRangeHandle(score);
+    nearbySlider.setPointerCapture(event.pointerId);
+    moveRangeHandle(draggedRangeHandle, score);
+  });
+
+  nearbySlider.addEventListener("pointermove", (event) => {
+    if (!draggedRangeHandle) return;
+    moveRangeHandle(draggedRangeHandle, scoreFromPointer(event));
+  });
+
+  nearbySlider.addEventListener("pointerup", () => {
+    draggedRangeHandle = null;
+  });
+
+  nearbySlider.addEventListener("pointercancel", () => {
+    draggedRangeHandle = null;
+  });
+}
+
 updateNearbyValue();
+openMapInPopup().catch(() => {});
