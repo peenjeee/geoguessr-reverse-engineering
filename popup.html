@@ -4,55 +4,240 @@
     <meta charset="utf-8">
     <title>PNJ GeoGuessr Tools</title>
     <style>
+      :root {
+        --gg-font: "GeoGuessr", "Neo Sans Std", "Nunito Sans", "Arial Rounded MT Bold", system-ui, sans-serif;
+        --dark: #2c0d67;
+        --card: #5225a8;
+        --card-deep: #35106f;
+        --outline: #7551c8;
+        --button-top: #b999ff;
+        --button-bottom: #6d3ad6;
+        --text: #ffffff;
+        --muted: #c7b5ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
       body {
-        width: 220px;
+        width: 320px;
+        max-height: 600px;
         margin: 0;
-        padding: 12px;
-        font: 13px system-ui, sans-serif;
+        padding: 8px;
+        overflow-y: auto;
+        background:
+          radial-gradient(circle at 16% 12%, rgba(255, 255, 255, .85) 0 1px, transparent 2px),
+          radial-gradient(circle at 86% 18%, rgba(255, 255, 255, .7) 0 1px, transparent 2px),
+          radial-gradient(circle at 72% 72%, rgba(255, 255, 255, .55) 0 1px, transparent 2px),
+          linear-gradient(180deg, #5b28b4 0%, var(--dark) 100%);
+        color: var(--text);
+        font: 800 14px/1.25 var(--gg-font);
+      }
+
+      ::-webkit-scrollbar {
+        width: 10px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: #2c0d67;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        border: 2px solid #2c0d67;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #b999ff, #6d3ad6);
+      }
+
+      .panel {
+        overflow: hidden;
+        border: 3px solid #7551c8;
+        border-radius: 20px;
+        background: var(--card);
+        box-shadow:
+          inset 0 0 0 2px var(--outline),
+          0 12px 26px rgba(34, 9, 85, .45);
+      }
+
+      .hero {
+        position: relative;
+        height: 118px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 50% 74%, rgba(87, 255, 202, .95) 0 8%, rgba(55, 199, 226, .72) 9% 18%, transparent 28%),
+          radial-gradient(circle at 25% 86%, #7bd64a 0 7%, transparent 8%),
+          radial-gradient(circle at 76% 88%, #58c73d 0 10%, transparent 11%),
+          linear-gradient(135deg, #5136b8 0%, #4a2e9b 38%, #20173f 100%);
+      }
+
+      .hero::before,
+      .hero::after {
+        content: "";
+        position: absolute;
+        width: 88px;
+        height: 88px;
+        border: 8px solid rgba(255, 255, 255, .76);
+        border-left: 0;
+        border-bottom: 0;
+        transform: rotate(-38deg);
+      }
+
+      .hero::before {
+        top: 12px;
+        left: 18px;
+      }
+
+      .hero::after {
+        top: 16px;
+        right: -18px;
+      }
+
+      .pin {
+        position: absolute;
+        left: 50%;
+        top: 30px;
+        width: 42px;
+        height: 42px;
+        border-radius: 50% 50% 50% 0;
+        background: #ff416d;
+        box-shadow: 0 0 24px rgba(255, 65, 109, .9);
+        transform: translateX(-50%) rotate(-45deg);
+      }
+
+      .pin::after {
+        content: "";
+        position: absolute;
+        inset: 11px;
+        border-radius: 50%;
+        background: #fff;
+      }
+
+      .content {
+        padding: 20px 20px 16px;
+        background: linear-gradient(180deg, #5b28b4 0%, var(--card-deep) 100%);
+      }
+
+      #brand {
+        margin: 0 0 16px;
+        color: #fff;
+        font-size: 24px;
+        font-style: italic;
+        font-weight: 950;
+        letter-spacing: 0;
+        text-align: left;
+        text-shadow: 0 3px 0 rgba(25, 8, 85, .65);
       }
 
       button {
         width: 100%;
-        margin: 0 0 8px;
-        padding: 8px;
-        border: 1px solid #d1d5db;
-        border-radius: 6px;
-        background: #fff;
+        min-height: 44px;
+        margin: 0 0 10px;
+        padding: 0 16px;
+        border: 0;
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--button-top) 0%, var(--button-bottom) 100%);
+        box-shadow:
+          inset 0 2px 0 rgba(255, 255, 255, .35),
+          0 5px 0 #321071,
+          0 12px 18px rgba(17, 5, 47, .38);
+        color: #fff;
         cursor: pointer;
+        font: 950 14px/1 var(--gg-font);
+        letter-spacing: 0;
+        text-transform: uppercase;
+        text-shadow: 0 2px 0 rgba(30, 8, 92, .55);
       }
 
       button:hover {
-        background: #f3f4f6;
+        filter: brightness(1.08);
       }
 
-      #brand {
-        margin-bottom: 10px;
-        color: #111827;
-        font-weight: 600;
-        text-align: center;
+      .range-card {
+        margin: -2px 0 12px;
+        padding: 12px;
+        border: 2px solid rgba(255, 255, 255, .18);
+        border-radius: 16px;
+        background: rgba(24, 6, 68, .42);
+        box-shadow: inset 0 2px 0 rgba(255, 255, 255, .08);
+      }
+
+      .range-title {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        color: #fff;
+        font-size: 12px;
+        text-shadow: 0 2px 0 rgba(30, 8, 92, .55);
+        text-transform: uppercase;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: #ff416d;
+      }
+
+      .map-card {
+        overflow: hidden;
+        height: 220px;
+        margin: -2px 0 12px;
+        border: 2px solid rgba(255, 255, 255, .18);
+        border-radius: 16px;
+        background: rgba(24, 6, 68, .42);
+        box-shadow: inset 0 2px 0 rgba(255, 255, 255, .08);
+      }
+
+      .map-card iframe {
+        width: 100%;
+        height: calc(100% + 44px);
+        border: 0;
+        display: block;
+      }
+
+      [hidden] {
+        display: none !important;
       }
 
       #status {
-        min-height: 18px;
-        color: #4b5563;
-      }
-
-      #footer {
-        margin-top: 8px;
-        color: #6b7280;
+        min-height: 14px;
+        color: #ffe1ff;
         font-size: 11px;
         text-align: center;
       }
 
+      #footer {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 11px;
+        text-align: center;
+      }
     </style>
   </head>
   <body>
-    <div id="brand">PNJ GeoGuessr Tools</div>
-    <button data-place="exact">Place exact</button>
-    <button data-place="nearby">Place nearby</button>
-    <button data-place="maps">Open maps</button>
-    <div id="status"></div>
-    <div id="footer">©2026</div>
+    <div class="panel">
+      <div class="hero">
+        <div class="pin"></div>
+      </div>
+      <div class="content">
+        <div id="brand">PNJ GeoGuessr Tools</div>
+        <button data-place="exact">Place exact</button>
+        <button data-nearby-toggle>Place nearby</button>
+        <div id="nearby-panel" class="range-card" hidden>
+          <div class="range-title">
+            <span>Score range</span>
+            <span id="nearby-value">3000-4500</span>
+          </div>
+          <input id="nearby-min" type="range" min="0" max="5000" step="50" value="3000">
+          <input id="nearby-max" type="range" min="0" max="5000" step="50" value="4500">
+          <button data-place="nearby">Place range</button>
+        </div>
+        <button data-map-toggle>Open maps</button>
+        <div id="map-panel" class="map-card" hidden>
+          <iframe id="map-frame" title="Round map" loading="lazy"></iframe>
+        </div>
+        <div id="status"></div>
+        <div id="footer">©2026</div>
+      </div>
+    </div>
     <script src="popup.js"></script>
   </body>
 </html>

@@ -12,7 +12,7 @@ cd geoguessr-reverse-engineering
 ## Fitur
 
 - Place exact
-- Place nearby dengan estimasi skor 4500-4900
+- Place nearby dengan slider range skor
 - Open maps untuk lokasi ronde
 
 ## Install

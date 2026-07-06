@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_VERSION = "clean-v2";
+  const SCRIPT_VERSION = "clean-v4";
   if (window.__localInjectorInternalVersion === SCRIPT_VERSION) return;
 
   window.__localInjectorInternal = true;
@@ -22,25 +22,8 @@
   state.current = state.locations[state.locations.length - 1] || null;
   state.source = state.source || "stored";
 
-  const badge = document.getElementById("local-injector-internal") || document.createElement("div");
-  badge.id = "local-injector-internal";
-  badge.textContent = "waiting for round location";
-  badge.style.cssText = [
-    "position:fixed",
-    "right:12px",
-    "bottom:12px",
-    "z-index:2147483647",
-    "padding:8px 10px",
-    "border-radius:6px",
-    "background:#111827",
-    "color:#fff",
-    "font:12px/1.3 system-ui,sans-serif",
-    "box-shadow:0 6px 18px rgba(0,0,0,.22)",
-  ].join(";");
-
-  function showBadge(text) {
-    if (text) badge.textContent = text;
-    badge.remove();
+  function clearBadge() {
+    document.getElementById("local-injector-internal")?.remove();
   }
 
   function loadLocations() {
@@ -157,7 +140,7 @@
 
     if (state.current) {
       const round = state.current.round ? `R${state.current.round} ` : "";
-      showBadge(`saved ${round}${state.current.lat.toFixed(5)}, ${state.current.lng.toFixed(5)}`);
+      clearBadge();
       window.dispatchEvent(new CustomEvent("local-injector:location", { detail: state.current }));
     }
   }
@@ -174,7 +157,7 @@
     state.source = "google";
     state.locations = state.locations.slice(-20);
     saveLocations();
-    showBadge(`saved ${state.current.lat.toFixed(5)}, ${state.current.lng.toFixed(5)}`);
+    clearBadge();
     window.dispatchEvent(new CustomEvent("local-injector:location", { detail: state.current }));
   }
 
@@ -484,7 +467,6 @@
     return Array.from(document.querySelectorAll("button,[role='button'],a,canvas,div,section"))
       .map((element) => ({ element, rect: element.getBoundingClientRect(), text: textSignal(element) }))
       .filter(({ element, rect }) => {
-        if (element === badge || badge.contains(element)) return false;
         if (rect.width < 20 || rect.height < 20) return false;
         if (rect.right < 0 || rect.bottom < 0 || rect.left > width || rect.top > height) return false;
         return rect.left > width * 0.45 || rect.top > height * 0.45;
@@ -561,15 +543,19 @@
       clickElementChain(target, x, y);
     });
 
-    showBadge(`viewport click ${coord.lat.toFixed(5)}, ${coord.lng.toFixed(5)}`);
+    clearBadge();
     window.dispatchEvent(new CustomEvent("local-injector:placed", { detail: coord }));
     return true;
   }
 
-  function nearbyCoord(coord) {
-    const targetScore = 4500 + Math.random() * 400;
+  function nearbyCoord(coord, scoreRange = {}) {
+    const minScore = Math.max(0, Math.min(5000, Number(scoreRange.min ?? 3000)));
+    const maxScore = Math.max(0, Math.min(5000, Number(scoreRange.max ?? 4500)));
+    const low = Math.min(minScore, maxScore);
+    const high = Math.max(minScore, maxScore);
+    const targetScore = low + Math.random() * (high - low);
     // ponytail: approximate world-map scoring; exact score needs per-map scoring config.
-    const distanceKm = -2000 * Math.log(targetScore / 5000);
+    const distanceKm = targetScore > 0 ? -2000 * Math.log(targetScore / 5000) : 20015;
     const bearing = Math.random() * Math.PI * 2;
     const latOffset = (Math.cos(bearing) * distanceKm) / 111;
     const lngOffset = (Math.sin(bearing) * distanceKm) / (111 * Math.max(0.15, Math.cos((coord.lat * Math.PI) / 180)));
@@ -652,14 +638,14 @@
       if (target !== candidate.canvas) clickElementChain(candidate.canvas, x, y);
     }
 
-    showBadge(`fallback click ${coord.lat.toFixed(5)}, ${coord.lng.toFixed(5)}`);
+    clearBadge();
     window.dispatchEvent(new CustomEvent("local-injector:placed", { detail: coord }));
     return true;
   }
 
   function placeOnMap(coord, quiet = false) {
     if (placeViaReactMap(coord)) {
-      showBadge(`placed ${coord.lat.toFixed(5)}, ${coord.lng.toFixed(5)}`);
+      clearBadge();
       window.dispatchEvent(new CustomEvent("local-injector:placed", { detail: coord }));
       return true;
     }
@@ -677,7 +663,7 @@
         if (!point) continue;
 
         dispatchCanvasClick(map, coord, point);
-        showBadge(`placed ${coord.lat.toFixed(5)}, ${coord.lng.toFixed(5)}`);
+        clearBadge();
         window.dispatchEvent(new CustomEvent("local-injector:placed", { detail: coord }));
         return true;
       } catch {
@@ -700,7 +686,7 @@
     if (!isCoord(coord)) return false;
 
     window.open(`https://maps.google.com/?output=embed&q=${coord.lat},${coord.lng}&ll=${coord.lat},${coord.lng}&z=5`);
-    showBadge(`maps ${coord.lat.toFixed(5)}, ${coord.lng.toFixed(5)}`);
+    clearBadge();
     return true;
   }
 
@@ -715,20 +701,20 @@
       clickTargets: mapCandidates().length,
       targetSummary: targetSummary(),
       visibleActions: visibleActionSummary(),
-      badge: badge.textContent,
+      badge: "",
     };
   };
 
-  window.__localInjectorPlace = async function localInjectorPlace(coord, mode = "exact") {
+  window.__localInjectorPlace = async function localInjectorPlace(coord, mode = "exact", options = {}) {
     const target = isCoord(coord) ? coord : currentCoord();
     if (!target) {
-      showBadge("no round location yet");
+      clearBadge();
       return { ok: false, reason: "no location", status: window.__localInjectorStatus() };
     }
 
     if (mode === "maps") return { ok: openMaps(target), status: window.__localInjectorStatus() };
 
-    const guess = mode === "nearby" ? nearbyCoord(target) : target;
+    const guess = mode === "nearby" ? nearbyCoord(target, options.scoreRange) : target;
     if (placeOnMap(guess, true)) return { ok: true, status: window.__localInjectorStatus() };
 
     openGuessMap();
@@ -738,8 +724,8 @@
   };
 
   document.documentElement.dataset.localInjectorInternal = "ready";
-  showBadge();
-  window.addEventListener("DOMContentLoaded", () => showBadge(), { once: true });
+  clearBadge();
+  window.addEventListener("DOMContentLoaded", clearBadge, { once: true });
   patchFetch();
   patchXhr();
   hookMapLibrary("mapboxgl");

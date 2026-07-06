@@ -1,8 +1,11 @@
 {
   "manifest_version": 3,
   "name": "PNJ GeoGuessr Tools",
-  "version": "1.0.21",
+  "version": "1.0.30",
   "description": "PNJ GeoGuessr Tools.",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; frame-src https://www.openstreetmap.org https://www.google.com https://maps.google.com;"
+  },
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",

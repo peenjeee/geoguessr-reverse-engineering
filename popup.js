@@ -1,4 +1,10 @@
 const statusBox = document.getElementById("status");
+const nearbyPanel = document.getElementById("nearby-panel");
+const nearbyMin = document.getElementById("nearby-min");
+const nearbyMax = document.getElementById("nearby-max");
+const nearbyValue = document.getElementById("nearby-value");
+const mapPanel = document.getElementById("map-panel");
+const mapFrame = document.getElementById("map-frame");
 const allowedPage = /^(https?:\/\/((localhost|127\.0\.0\.1)(:\d+)?|([^/]+\.)?geoguessr\.com)\/|file:\/\/)/;
 
 async function activeTab() {
@@ -59,12 +65,32 @@ function formatStatus(data) {
   return "";
 }
 
-async function placePin(mode = "exact") {
+function nearbyScoreRange() {
+  const min = Math.max(0, Math.min(5000, Number(nearbyMin.value)));
+  const max = Math.max(0, Math.min(5000, Number(nearbyMax.value)));
+  return { min: Math.min(min, max), max: Math.max(min, max) };
+}
+
+function updateNearbyValue() {
+  const range = nearbyScoreRange();
+  nearbyValue.textContent = `${range.min}-${range.max}`;
+}
+
+function mapUrl(lat, lng) {
+  const span = 6;
+  const minLat = Math.max(-85, lat - span);
+  const maxLat = Math.min(85, lat + span);
+  const minLng = Math.max(-180, lng - span);
+  const maxLng = Math.min(180, lng + span);
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${minLng}%2C${minLat}%2C${maxLng}%2C${maxLat}&layer=mapnik&marker=${lat}%2C${lng}`;
+}
+
+async function currentRound() {
   const tab = await activeTab();
 
   if (!tab?.id || !allowedPage.test(tab.url || "")) {
     statusBox.textContent = "";
-    return;
+    return {};
   }
 
   await inject(tab, "internal.js", "MAIN");
@@ -73,8 +99,15 @@ async function placePin(mode = "exact") {
   const data = pickedStatus?.result;
   if (!data?.current) {
     statusBox.textContent = formatStatus(data);
-    return;
+    return {};
   }
+
+  return { tab, pickedStatus, data };
+}
+
+async function placePin(mode = "exact") {
+  const { tab, pickedStatus, data } = await currentRound();
+  if (!data?.current) return;
 
   const target = Number.isInteger(pickedStatus.frameId)
     ? { tabId: tab.id, frameIds: [pickedStatus.frameId] }
@@ -83,10 +116,10 @@ async function placePin(mode = "exact") {
   const results = await chrome.scripting.executeScript({
     target,
     world: "MAIN",
-    args: [data.current, mode],
-    func: (coord, placeMode) => {
+    args: [data.current, mode, mode === "nearby" ? { scoreRange: nearbyScoreRange() } : null],
+    func: (coord, placeMode, options) => {
       if (typeof window.__localInjectorPlace !== "function") return { ok: false, reason: "not ready" };
-      return window.__localInjectorPlace(coord, placeMode);
+      return window.__localInjectorPlace(coord, placeMode, options);
     },
   });
 
@@ -97,7 +130,30 @@ async function placePin(mode = "exact") {
   statusBox.textContent = placed?.ok ? "" : `${mode} failed.`;
 }
 
+async function openMapInPopup() {
+  const { data } = await currentRound();
+  if (!data?.current) return;
+
+  const { lat, lng } = data.current;
+  mapFrame.src = mapUrl(lat, lng);
+  mapPanel.hidden = false;
+  statusBox.textContent = "";
+}
+
 document.addEventListener("click", (event) => {
+  if (event.target.closest("[data-nearby-toggle]")) {
+    nearbyPanel.hidden = !nearbyPanel.hidden;
+    statusBox.textContent = "";
+    return;
+  }
+
+  if (event.target.closest("[data-map-toggle]")) {
+    openMapInPopup().catch((error) => {
+      statusBox.textContent = error.message;
+    });
+    return;
+  }
+
   const placeButton = event.target.closest("[data-place]");
   if (!placeButton) return;
 
@@ -105,3 +161,6 @@ document.addEventListener("click", (event) => {
     statusBox.textContent = error.message;
   });
 });
+
+[nearbyMin, nearbyMax].forEach((input) => input.addEventListener("input", updateNearbyValue));
+updateNearbyValue();
