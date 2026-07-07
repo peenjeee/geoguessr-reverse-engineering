@@ -9,6 +9,7 @@ const copyrightYear = document.getElementById("copyright-year");
 const allowedPage = /^(https?:\/\/((localhost|127\.0\.0\.1)(:\d+)?|([^/]+\.)?geoguessr\.com)\/|file:\/\/)/;
 const targetTabId = Number(new URLSearchParams(location.search).get("targetTabId"));
 let draggedRangeHandle;
+let lastMapKey = "";
 
 async function activeTab() {
   if (Number.isInteger(targetTabId) && targetTabId > 0) {
@@ -119,6 +120,18 @@ function mapUrl(lat, lng) {
   return `https://maps.google.com/maps?q=${lat},${lng}&z=6&output=embed`;
 }
 
+function setMapCoord(coord) {
+  if (typeof coord?.lat !== "number" || typeof coord?.lng !== "number") return;
+
+  const mapKey = `${coord.lat},${coord.lng}`;
+  if (mapKey !== lastMapKey) {
+    mapFrame.src = mapUrl(coord.lat, coord.lng);
+    lastMapKey = mapKey;
+  }
+  mapPanel.hidden = false;
+  statusBox.textContent = "";
+}
+
 async function currentRound() {
   const tab = await activeTab();
 
@@ -168,10 +181,18 @@ async function openMapInPopup() {
   const { data } = await currentRound();
   if (!data?.current) return;
 
-  const { lat, lng } = data.current;
-  mapFrame.src = mapUrl(lat, lng);
-  mapPanel.hidden = false;
-  statusBox.textContent = "";
+  setMapCoord(data.current);
+}
+
+async function hidePagePanel() {
+  const tab = await activeTab();
+  if (!tab?.id || !allowedPage.test(tab.url || "")) return;
+
+  await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    world: "MAIN",
+    func: () => window.__pnjHidePanel?.(),
+  });
 }
 
 document.addEventListener("click", (event) => {
@@ -214,6 +235,23 @@ if (nearbySlider && nearbyMin && nearbyMax) {
   });
 }
 
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (message?.type !== "pnj-location") return;
+  if (Number.isInteger(targetTabId) && targetTabId > 0 && sender.tab?.id !== targetTabId) return;
+
+  if (targetTabId > 0) {
+    setMapCoord(message.coord);
+    return;
+  }
+
+  activeTab()
+    .then((tab) => {
+      if (tab?.id === sender.tab?.id) setMapCoord(message.coord);
+    })
+    .catch(() => {});
+});
+
 updateNearbyValue();
 if (copyrightYear) copyrightYear.textContent = new Date().getFullYear();
+hidePagePanel().catch(() => {});
 openMapInPopup().catch(() => {});
