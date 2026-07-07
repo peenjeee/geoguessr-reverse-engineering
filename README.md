@@ -1,6 +1,6 @@
 # PNJ GeoGuessr Tools
 
-Chrome extension helper untuk GeoGuessr.
+Chrome extension helper for GeoGuessr.
 
 ## Clone
 
@@ -9,13 +9,13 @@ git clone https://github.com/peenjeee/geoguessr-reverse-engineering.git
 cd geoguessr-reverse-engineering
 ```
 
-## Fitur
+## Features
 
 - Place exact
-- Place nearby dengan slider range skor
-- Refresh map untuk lokasi ronde
+- Place nearby with an adjustable score range slider
+- Refresh map preview for the current round location
 
-## Tampilan
+## Preview
 
 ![PNJ GeoGuessr Tools popup](images/image1.png)
 
@@ -25,7 +25,7 @@ cd geoguessr-reverse-engineering
 
 ## Install
 
-1. Buka `chrome://extensions`.
-2. Aktifkan Developer mode.
-3. Klik Load unpacked.
-4. Pilih folder project ini.
+1. Open `chrome://extensions`.
+2. Enable Developer mode.
+3. Click Load unpacked.
+4. Select this project folder.

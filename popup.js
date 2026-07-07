@@ -5,6 +5,7 @@ const nearbyMax = document.getElementById("nearby-max");
 const nearbyValue = document.getElementById("nearby-value");
 const mapPanel = document.getElementById("map-panel");
 const mapFrame = document.getElementById("map-frame");
+const copyrightYear = document.getElementById("copyright-year");
 const allowedPage = /^(https?:\/\/((localhost|127\.0\.0\.1)(:\d+)?|([^/]+\.)?geoguessr\.com)\/|file:\/\/)/;
 const targetTabId = Number(new URLSearchParams(location.search).get("targetTabId"));
 let draggedRangeHandle;
@@ -214,4 +215,5 @@ if (nearbySlider && nearbyMin && nearbyMax) {
 }
 
 updateNearbyValue();
+if (copyrightYear) copyrightYear.textContent = new Date().getFullYear();
 openMapInPopup().catch(() => {});

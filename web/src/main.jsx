@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import extensionIcon from "../../icons/icon128.png";
-import heroImage from "../../images/hero.png";
 import imageOne from "../../images/image1.png";
 import imageTwo from "../../images/image2.png";
 import imageThree from "../../images/image3.png";
@@ -40,7 +39,7 @@ function App() {
 
   return (
     <main id="top">
-      <section className="hero" style={{ "--hero-image": `url(${heroImage})` }}>
+      <section className="hero">
         <nav className="nav" aria-label="Primary">
           <a className="brand" href="#top" aria-label="PNJ GeoGuessr Tools">
             {brandIcon}
@@ -49,11 +48,11 @@ function App() {
           <div className="nav-actions">
             <a className="github-link" href={repoUrl} target="_blank" rel="noreferrer">
               <GitHubIcon />
-              <span>Star this project</span>
+              <span>Star</span>
             </a>
             <a className="github-link" href={`${repoUrl}/fork`} target="_blank" rel="noreferrer">
               <GitHubIcon />
-              <span>Fork this project</span>
+              <span>Fork</span>
             </a>
           </div>
         </nav>
@@ -66,17 +65,22 @@ function App() {
             score range, and a map preview built into the popup.
           </p>
           <div className="actions">
-            <a className="button primary" href="https://github.com/peenjeee/geoguessr-reverse-engineering/releases">
+            <a
+              className="button primary"
+              href={`${repoUrl}/releases`}
+              target="_blank"
+              rel="noreferrer"
+            >
               Download
             </a>
-            <a className="button secondary" href={repoUrl}>
+            <a className="button secondary" href={repoUrl} target="_blank" rel="noreferrer">
               Source
             </a>
           </div>
         </div>
 
         <div className="product-shot" aria-label="Extension preview">
-          <img src={imageOne} alt="PNJ GeoGuessr Tools popup preview" />
+          <img src="/hero.webp" alt="PNJ GeoGuessr Tools extension preview" />
         </div>
       </section>
 
@@ -117,9 +121,15 @@ function App() {
           <p>Chrome extension helper for faster GeoGuessr rounds.</p>
         </div>
         <div className="footer-links">
-          <a href={`${repoUrl}/releases`}>Download</a>
-          <a href={repoUrl}>GitHub</a>
-          <a href={`${repoUrl}/fork`}>Fork</a>
+          <a href={`${repoUrl}/releases`} target="_blank" rel="noreferrer">
+            Download
+          </a>
+          <a href={repoUrl} target="_blank" rel="noreferrer">
+            GitHub
+          </a>
+          <a href={`${repoUrl}/fork`} target="_blank" rel="noreferrer">
+            Fork
+          </a>
         </div>
         <small>©2026 PNJ GeoGuessr Tools.</small>
       </footer>

@@ -205,6 +205,15 @@
         display: block;
       }
 
+      .copyright {
+        flex: 0 0 auto;
+        padding: 8px 0 6px;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+        text-shadow: 0 2px 0 rgba(30, 8, 92, .55);
+      }
+
       [hidden] {
         display: none !important;
       }
@@ -252,6 +261,7 @@
         <div id="map-panel" class="map-card">
           <iframe id="map-frame" title="Round map" loading="lazy"></iframe>
         </div>
+        <footer class="copyright">©<span id="copyright-year"></span></footer>
         <div id="status"></div>
       </div>
     </div>
