@@ -167,6 +167,7 @@ a {
 .product-shot,
 .feature-band,
 .gallery,
+.mode-band,
 .install {
   position: relative;
   z-index: 1;
@@ -241,7 +242,8 @@ h1 {
   width: 100%;
 }
 
-.feature-band {
+.feature-band,
+.mode-band {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
@@ -249,7 +251,8 @@ h1 {
   background: #321071;
 }
 
-.feature {
+.feature,
+.mode-band article {
   min-height: 142px;
   padding: 24px;
   border: 2px solid rgba(255, 255, 255, .16);
@@ -257,14 +260,20 @@ h1 {
   background: rgba(24, 6, 68, .35);
 }
 
-.feature h2 {
+.feature h2,
+.mode-band h2 {
   margin-bottom: 8px;
   font-size: 22px;
 }
 
 .feature p,
+.mode-band p,
 .install li {
   color: var(--muted);
+}
+
+.mode-band {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .gallery {
@@ -300,6 +309,16 @@ h1 {
     grid-row: 2;
     justify-self: center;
     width: calc((100% - 20px) / 2);
+  }
+
+  .gallery img:nth-child(4) {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .gallery img:nth-child(5) {
+    grid-column: 2;
+    grid-row: 3;
   }
 }
 
@@ -453,7 +472,8 @@ h1 {
   }
 
   .feature-band,
-  .gallery {
+  .gallery,
+  .mode-band {
     grid-template-columns: 1fr;
   }
 

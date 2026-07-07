@@ -14,6 +14,8 @@ cd geoguessr-reverse-engineering
 - Place exact
 - Place nearby with an adjustable score range slider
 - Refresh map preview for the current round location
+- Browser side panel for normal Chrome/Brave tabs
+- In-page launcher fallback for installed GeoGuessr PWA windows
 
 ## Preview
 
@@ -22,6 +24,24 @@ cd geoguessr-reverse-engineering
 ![PNJ GeoGuessr Tools range](images/image2.png)
 
 ![PNJ GeoGuessr Tools map](images/image3.png)
+
+![PNJ GeoGuessr Tools PWA launcher](images/pwa1.png)
+
+![PNJ GeoGuessr Tools PWA panel](images/pwa2.png)
+
+## PWA and Browser Modes
+
+### Normal browser tab
+
+When GeoGuessr is opened in Chrome or Brave as a normal tab, PNJ GeoGuessr Tools opens in the browser side panel.
+
+### Installed PWA
+
+When GeoGuessr is opened as an installed desktop PWA, the browser side panel may not be available. In that case, PNJ GeoGuessr Tools appears as an in-page PNJ launcher button.
+
+### Fallback behavior
+
+If the side panel cannot open, the extension automatically falls back to the in-page launcher.
 
 ## Install
 

@@ -4,12 +4,17 @@ import extensionIcon from "../../icons/icon128.png";
 import imageOne from "../../images/image1.png";
 import imageTwo from "../../images/image2.png";
 import imageThree from "../../images/image3.png";
+import pwaOne from "../../images/pwa1.png";
+import pwaTwo from "../../images/pwa2.png";
 import "./styles.css";
 
 const features = [
   ["Place exact", "Drop the pin on the captured round location."],
   ["Place nearby", "Choose a score range and place close enough."],
-  ["Refresh map", "Preview the round location inside the popup."]
+  ["Refresh map", "Preview the round location inside the popup."],
+  ["Browser mode", "Open the tools in the Chrome or Brave side panel."],
+  ["PWA mode", "Use the in-page PNJ launcher when GeoGuessr runs as an installed app."],
+  ["Fallback ready", "If the side panel cannot open, the page launcher appears automatically."]
 ];
 
 const repoUrl = "https://github.com/peenjeee/geoguessr-reverse-engineering";
@@ -97,6 +102,21 @@ function App() {
         <img src={imageOne} alt="PNJ GeoGuessr Tools popup screenshot" />
         <img src={imageTwo} alt="PNJ GeoGuessr Tools range screenshot" />
         <img src={imageThree} alt="PNJ GeoGuessr Tools map screenshot" />
+        <img src={pwaOne} alt="PNJ GeoGuessr Tools PWA launcher screenshot" />
+        <img src={pwaTwo} alt="PNJ GeoGuessr Tools PWA panel screenshot" />
+      </section>
+
+      <section className="mode-band" aria-label="PWA and browser modes">
+        <article>
+          <p className="eyebrow">Normal browser tab</p>
+          <h2>Side panel mode</h2>
+          <p>Open GeoGuessr in Chrome or Brave and PNJ GeoGuessr Tools runs in the browser side panel.</p>
+        </article>
+        <article>
+          <p className="eyebrow">Installed PWA</p>
+          <h2>Page launcher mode</h2>
+          <p>Open GeoGuessr as a desktop app and the tools appear through the in-page PNJ launcher.</p>
+        </article>
       </section>
 
       <section id="install" className="install">
