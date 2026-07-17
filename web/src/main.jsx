@@ -98,6 +98,26 @@ function App() {
         ))}
       </section>
 
+      <section className="mode-band auto-bot-band" aria-label="Auto GeoGuessr Bot">
+        <article style={{ gridColumn: "1 / -1", textAlign: "center" }}>
+          <p className="eyebrow">Companion Userscript</p>
+          <h2>Auto-GeoGuessr Bot</h2>
+          <p style={{ maxWidth: "600px", margin: "1rem auto 2rem" }}>
+            Looking to automate your GeoGuessr farming? We have a companion Tampermonkey Userscript that automatically clicks the PNJ buttons and cycles through rounds entirely on its own! It farms EXP seamlessly in the background.
+          </p>
+          <div className="actions" style={{ justifyContent: "center" }}>
+            <a
+              className="button primary"
+              href="https://github.com/peenjeee/auto-geoguessr"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Get Auto Bot
+            </a>
+          </div>
+        </article>
+      </section>
+
       <section className="gallery" aria-label="Screenshots">
         <img src={imageOne} alt="PNJ GeoGuessr Tools popup screenshot" />
         <img src={imageTwo} alt="PNJ GeoGuessr Tools range screenshot" />
@@ -146,6 +166,9 @@ function App() {
           </a>
           <a href={repoUrl} target="_blank" rel="noreferrer">
             GitHub
+          </a>
+          <a href="https://github.com/peenjeee/auto-geoguessr" target="_blank" rel="noreferrer">
+            Auto Bot
           </a>
           <a href={`${repoUrl}/fork`} target="_blank" rel="noreferrer">
             Fork

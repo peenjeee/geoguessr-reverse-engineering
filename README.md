@@ -17,6 +17,16 @@ cd geoguessr-reverse-engineering
 - Browser side panel for normal Chrome/Brave tabs
 - In-page launcher fallback for installed GeoGuessr PWA windows
 
+## Auto-GeoGuessr Bot
+
+Looking to automate your GeoGuessr farming? We have a companion Tampermonkey Userscript that clicks the PNJ buttons and cycles through rounds entirely on its own!
+
+- **Farms EXP seamlessly** in the background.
+- **Auto places the pin & guesses**.
+- **Automatically plays the next round**.
+
+[Download the Auto-GeoGuessr Userscript](https://github.com/peenjeee/auto-geoguessr)
+
 ## Preview
 
 ![PNJ GeoGuessr Tools popup](images/image1.png)
