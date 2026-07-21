@@ -27,6 +27,12 @@ Looking to automate your GeoGuessr farming? We have a companion Tampermonkey Use
 
 [Download the Auto-GeoGuessr Userscript](https://github.com/peenjeee/auto-geoguessr)
 
+## Free GeoGuessr Challenge Links
+
+Looking for free challenge links? Check out our companion web containing a curated collection of free GeoGuessr challenge links so you can play without a subscription:
+
+[Browse Free Challenge Links](https://gc.0xpnj.dev)
+
 ## Preview
 
 ![PNJ GeoGuessr Tools popup](images/image1.png)

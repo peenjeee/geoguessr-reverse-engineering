@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://geo.0xpnj.dev/
+Sitemap: https://geo.0xpnj.dev/sitemap.xml

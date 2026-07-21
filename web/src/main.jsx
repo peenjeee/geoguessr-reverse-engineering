@@ -98,14 +98,16 @@ function App() {
         ))}
       </section>
 
-      <section className="mode-band auto-bot-band" aria-label="Auto GeoGuessr Bot">
-        <article style={{ gridColumn: "1 / -1", textAlign: "center" }}>
-          <p className="eyebrow">Companion Userscript</p>
-          <h2>Auto-GeoGuessr Bot</h2>
-          <p style={{ maxWidth: "600px", margin: "1rem auto 2rem" }}>
-            Looking to automate your GeoGuessr farming? We have a companion Tampermonkey Userscript that automatically clicks the PNJ buttons and cycles through rounds entirely on its own! It farms EXP seamlessly in the background.
-          </p>
-          <div className="actions" style={{ justifyContent: "center" }}>
+      <section className="mode-band" aria-label="Companion tools and resources">
+        <article style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div>
+            <p className="eyebrow">Companion Userscript</p>
+            <h2>Auto-GeoGuessr Bot</h2>
+            <p>
+              Looking to automate your GeoGuessr farming? We have a companion Tampermonkey Userscript that automatically clicks the PNJ buttons and cycles through rounds entirely on its own! It farms EXP seamlessly in the background.
+            </p>
+          </div>
+          <div className="actions" style={{ marginTop: "1.5rem" }}>
             <a
               className="button primary"
               href="https://github.com/peenjeee/auto-geoguessr"
@@ -113,6 +115,25 @@ function App() {
               rel="noreferrer"
             >
               Get Auto Bot
+            </a>
+          </div>
+        </article>
+        <article style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div>
+            <p className="eyebrow">Free Challenges</p>
+            <h2>GeoGuessr Free Challenges</h2>
+            <p>
+              Need free challenge links? Visit our companion website containing a curated collection of free GeoGuessr challenge links so you can play without a subscription.
+            </p>
+          </div>
+          <div className="actions" style={{ marginTop: "1.5rem" }}>
+            <a
+              className="button primary"
+              href="https://gc.0xpnj.dev"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Free Challenges
             </a>
           </div>
         </article>
@@ -169,6 +190,9 @@ function App() {
           </a>
           <a href="https://github.com/peenjeee/auto-geoguessr" target="_blank" rel="noreferrer">
             Auto Bot
+          </a>
+          <a href="https://gc.0xpnj.dev" target="_blank" rel="noreferrer">
+            Free Challenges
           </a>
           <a href={`${repoUrl}/fork`} target="_blank" rel="noreferrer">
             Fork
