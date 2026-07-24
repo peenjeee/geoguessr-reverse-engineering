@@ -50,7 +50,7 @@ async function statusResults(tab) {
         clickTargets: 0,
         targetSummary: [],
         visibleActions: [],
-        badge: document.getElementById("local-injector-internal")?.textContent || "",
+        badge: document.getElementById("pnj-internal")?.textContent || "",
       };
     },
   });

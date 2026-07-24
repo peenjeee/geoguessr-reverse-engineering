@@ -12,7 +12,7 @@
   window.__pnjInt = true;
   window.__pnjIntVersion = SCRIPT_VERSION;
 
-  const STORE_KEY = "local-injector:round-locations";
+  const STORE_KEY = "pnj_rnd_loc";
   const MAP_TARGET_SELECTOR = [
     "canvas",
     "[class*='guess-map']",
@@ -24,7 +24,7 @@
   ].join(",");
 
   function clearBadge() {
-    document.getElementById("local-injector-internal")?.remove();
+    document.getElementById("pnj-internal")?.remove();
   }
 
   function loadLocations() {
@@ -569,7 +569,7 @@
     });
 
     clearBadge();
-    window.dispatchEvent(new CustomEvent("local-injector:placed", { detail: coord }));
+    window.dispatchEvent(new CustomEvent("pnj_loc_plc", { detail: coord }));
     return true;
   }
 
@@ -686,7 +686,7 @@
     }
 
     clearBadge();
-    window.dispatchEvent(new CustomEvent("local-injector:placed", { detail: coord }));
+    window.dispatchEvent(new CustomEvent("pnj_loc_plc", { detail: coord }));
     return true;
   }
 
@@ -989,14 +989,14 @@
         }
       }
     });
-    window.addEventListener("local-injector:location", refreshMap);
+    window.addEventListener("pnj_loc_upd", refreshMap);
 
     updateRange();
     refreshMap();
     document.documentElement.appendChild(host);
   }
 
-  document.documentElement.dataset.localInjectorInternal = "ready";
+  document.documentElement.dataset.pnjInt = "ready";
   clearBadge();
   window.__pnjShowPanel = () => ensurePwaPanel(true);
   window.__pnjHidePanel = () => document.getElementById("pnj-pwa-panel")?.remove();
@@ -1007,5 +1007,5 @@
   patchXhr();
   hookMapLibrary("mapboxgl");
   hookMapLibrary("maplibregl");
-  window.dispatchEvent(new CustomEvent("local-injector:internal-ready"));
+  window.dispatchEvent(new CustomEvent("pnj_int_rdy"));
 })();
