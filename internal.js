@@ -983,9 +983,9 @@
         if (button.dataset.pnjPlace === "exact-score") {
           const exactVal = Math.max(0, Math.min(4999, Number(host.querySelector("[data-pnj-exact-score]").value || 4990)));
           range = { min: exactVal, max: exactVal };
-          window.__localInjectorPlace(currentCoord(), "nearby", { scoreRange: range }).then(refreshMap);
+          window.__pnjCmdPlace(currentCoord(), "nearby", { scoreRange: range }).then(refreshMap);
         } else {
-          window.__localInjectorPlace(currentCoord(), button.dataset.pnjPlace, { scoreRange: range }).then(refreshMap);
+          window.__pnjCmdPlace(currentCoord(), button.dataset.pnjPlace, { scoreRange: range }).then(refreshMap);
         }
       }
     });
