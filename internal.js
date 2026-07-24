@@ -328,9 +328,8 @@
     }
   }
 
-  let isDispatching = false;
+  const dispatchedEvents = new WeakSet();
   function dispatchElementClick(element, clientX, clientY) {
-    if (isDispatching) return;
     const options = {
       bubbles: true,
       cancelable: true,
@@ -346,23 +345,22 @@
       pointerId: 1,
       pointerType: "mouse",
       isPrimary: true,
-      __localInjector: true,
     };
 
-    isDispatching = true;
-    try {
-      ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach((type) => {
-        const EventClass = type.startsWith("pointer") && window.PointerEvent ? PointerEvent : MouseEvent;
-        element.dispatchEvent(new EventClass(type, options));
-      });
-    } finally {
-      isDispatching = false;
-    }
+    ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach((type) => {
+      const EventClass = type.startsWith("pointer") && window.PointerEvent ? PointerEvent : MouseEvent;
+      const event = new EventClass(type, options);
+      if (!dispatchedEvents.has(event)) {
+          dispatchedEvents.add(event);
+          try {
+             element.dispatchEvent(event);
+          } catch(e) {}
+      }
+    });
   }
 
-  let isMoving = false;
+  const dispatchedMoveEvents = new WeakSet();
   function dispatchElementMove(element, clientX, clientY) {
-    if (isMoving) return;
     const options = {
       bubbles: true,
       cancelable: true,
@@ -377,18 +375,18 @@
       pointerId: 1,
       pointerType: "mouse",
       isPrimary: true,
-      __localInjector: true,
     };
 
-    isMoving = true;
-    try {
-      ["pointerover", "pointerenter", "pointermove", "mouseover", "mouseenter", "mousemove"].forEach((type) => {
-        const EventClass = type.startsWith("pointer") && window.PointerEvent ? PointerEvent : MouseEvent;
-        element.dispatchEvent(new EventClass(type, options));
-      });
-    } finally {
-      isMoving = false;
-    }
+    ["pointerover", "pointerenter", "pointermove", "mouseover", "mouseenter", "mousemove"].forEach((type) => {
+      const EventClass = type.startsWith("pointer") && window.PointerEvent ? PointerEvent : MouseEvent;
+      const event = new EventClass(type, options);
+      if (!dispatchedMoveEvents.has(event)) {
+          dispatchedMoveEvents.add(event);
+          try {
+             element.dispatchEvent(event);
+          } catch(e) {}
+      }
+    });
   }
 
   function clickElementChain(element, clientX, clientY) {
