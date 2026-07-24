@@ -1,9 +1,16 @@
 (function () {
   const SCRIPT_VERSION = "clean-v9";
-  if (window.__localInjectorInternalVersion === SCRIPT_VERSION) return;
+  const state = (window.__pnjState = window.__pnjState || {
+    locations: loadLocations(),
+    maps: [],
+    source: "stored",
+    current: null,
+  });
 
-  window.__localInjectorInternal = true;
-  window.__localInjectorInternalVersion = SCRIPT_VERSION;
+  if (window.__pnjInt) return;
+
+  window.__pnjInt = true;
+  window.__pnjIntVersion = SCRIPT_VERSION;
 
   const STORE_KEY = "local-injector:round-locations";
   const MAP_TARGET_SELECTOR = [
@@ -15,12 +22,6 @@
     "[aria-label*='Map']",
     "[aria-label*='map']",
   ].join(",");
-  const state = (window.__localInjectorState = window.__localInjectorState || {
-    locations: loadLocations(),
-    maps: [],
-  });
-  state.current = state.locations[state.locations.length - 1] || null;
-  state.source = state.source || "stored";
 
   function clearBadge() {
     document.getElementById("local-injector-internal")?.remove();
@@ -142,7 +143,7 @@
     if (state.current) {
       const round = state.current.round ? `R${state.current.round} ` : "";
       clearBadge();
-      window.dispatchEvent(new CustomEvent("local-injector:location", { detail: state.current }));
+      window.dispatchEvent(new CustomEvent("pnj_loc_upd", { detail: state.current }));
     }
   }
 
@@ -159,7 +160,7 @@
     state.locations = state.locations.slice(-20);
     saveLocations();
     clearBadge();
-    window.dispatchEvent(new CustomEvent("local-injector:location", { detail: state.current }));
+    window.dispatchEvent(new CustomEvent("pnj_loc_upd", { detail: state.current }));
   }
 
   function inspectGoogleMapsText(text) {
@@ -180,8 +181,10 @@
     }
   }
 
+  const patchedGlobals = new WeakSet();
+
   function patchFetch() {
-    if (typeof window.fetch !== "function" || window.fetch.__localInjectorPatched) return;
+    if (typeof window.fetch !== "function" || patchedGlobals.has(window.fetch)) return;
 
     window.fetch = new Proxy(window.fetch, {
       apply: function(target, thisArg, argumentsList) {
@@ -200,11 +203,11 @@
         });
       }
     });
-    window.fetch.__localInjectorPatched = true;
+    patchedGlobals.add(window.fetch);
   }
 
   function patchXhr() {
-    if (typeof window.XMLHttpRequest !== "function" || window.XMLHttpRequest.__localInjectorPatched) return;
+    if (typeof window.XMLHttpRequest !== "function" || patchedGlobals.has(window.XMLHttpRequest)) return;
 
     window.XMLHttpRequest = new Proxy(window.XMLHttpRequest, {
       construct: function(target, args) {
@@ -249,7 +252,7 @@
         return xhr;
       }
     });
-    window.XMLHttpRequest.__localInjectorPatched = true;
+    patchedGlobals.add(window.XMLHttpRequest);
   }
 
   function captureMap(map) {
@@ -264,7 +267,7 @@
   }
 
   function patchMapLibrary(library) {
-    if (!library || typeof library.Map !== "function" || library.__localInjectorPatched) return;
+    if (!library || typeof library.Map !== "function" || patchedGlobals.has(library)) return;
 
     const OriginalMap = library.Map;
 
@@ -277,7 +280,7 @@
     Object.setPrototypeOf(PatchedMap, OriginalMap);
     PatchedMap.prototype = OriginalMap.prototype;
     library.Map = PatchedMap;
-    library.__localInjectorPatched = true;
+    patchedGlobals.add(library);
   }
 
   function hookMapLibrary(name) {
@@ -690,7 +693,7 @@
   function placeOnMap(coord, quiet = false) {
     if (placeViaReactMap(coord)) {
       clearBadge();
-      window.dispatchEvent(new CustomEvent("local-injector:placed", { detail: coord }));
+      window.dispatchEvent(new CustomEvent("pnj_loc_plc", { detail: coord }));
       return true;
     }
 
@@ -708,7 +711,7 @@
 
         dispatchCanvasClick(map, coord, point);
         clearBadge();
-        window.dispatchEvent(new CustomEvent("local-injector:placed", { detail: coord }));
+        window.dispatchEvent(new CustomEvent("pnj_loc_plc", { detail: coord }));
         return true;
       } catch {
         // Try the next visible map.
@@ -734,7 +737,7 @@
     return true;
   }
 
-  window.__localInjectorStatus = function localInjectorStatus() {
+  window.__pnjCmdStatus = function pnjCmdStatus() {
     return {
       ready: true,
       current: currentCoord(),
@@ -749,22 +752,22 @@
     };
   };
 
-  window.__localInjectorPlace = async function localInjectorPlace(coord, mode = "exact", options = {}) {
+  window.__pnjCmdPlace = async function pnjCmdPlace(coord, mode = "exact", options = {}) {
     const target = isCoord(coord) ? coord : currentCoord();
     if (!target) {
       clearBadge();
-      return { ok: false, reason: "no location", status: window.__localInjectorStatus() };
+      return { ok: false, reason: "no location", status: window.__pnjCmdStatus() };
     }
 
-    if (mode === "maps") return { ok: openMaps(target), status: window.__localInjectorStatus() };
+    if (mode === "maps") return { ok: openMaps(target), status: window.__pnjCmdStatus() };
 
     const guess = mode === "nearby" ? nearbyCoord(target, options.scoreRange) : target;
-    if (placeOnMap(guess, true)) return { ok: true, status: window.__localInjectorStatus() };
+    if (placeOnMap(guess, true)) return { ok: true, status: window.__pnjCmdStatus() };
 
     openGuessMap();
     await delay(300);
 
-    return { ok: placeOnMap(guess), status: window.__localInjectorStatus() };
+    return { ok: placeOnMap(guess), status: window.__pnjCmdStatus() };
   };
 
   function isPwaWindow() {

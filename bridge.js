@@ -1,8 +1,8 @@
 (() => {
-  if (window.__pnjLocationBridge) return;
-  window.__pnjLocationBridge = true;
+  if (window.__pnjBridge) return;
+  window.__pnjBridge = true;
 
-  window.addEventListener("local-injector:location", (event) => {
+  window.addEventListener("pnj_loc_upd", (event) => {
     const coord = event.detail;
     if (typeof coord?.lat !== "number" || typeof coord?.lng !== "number") return;
 

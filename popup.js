@@ -33,15 +33,15 @@ async function statusResults(tab) {
     target: { tabId: tab.id, allFrames: true },
     world: "MAIN",
     func: () => {
-      if (typeof window.__localInjectorStatus === "function") {
-        return window.__localInjectorStatus();
+      if (typeof window.__pnjCmdStatus === "function") {
+        return window.__pnjCmdStatus();
       }
 
-      const state = window.__localInjectorState;
+      const state = window.__pnjState;
       const current = state && state.current;
 
       return {
-        ready: Boolean(window.__localInjectorInternal),
+        ready: Boolean(window.__pnjInt),
         current,
         source: state?.source || "unknown",
         locations: state?.locations?.length || 0,
@@ -165,8 +165,8 @@ async function placePin(mode = "exact") {
     world: "MAIN",
     args: [data.current, mode, mode === "nearby" ? { scoreRange: nearbyScoreRange() } : null],
     func: (coord, placeMode, options) => {
-      if (typeof window.__localInjectorPlace !== "function") return { ok: false, reason: "not ready" };
-      return window.__localInjectorPlace(coord, placeMode, options);
+      if (typeof window.__pnjCmdPlace !== "function") return { ok: false, reason: "not ready" };
+      return window.__pnjCmdPlace(coord, placeMode, options);
     },
   });
 
