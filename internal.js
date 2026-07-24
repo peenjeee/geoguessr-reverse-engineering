@@ -97,7 +97,8 @@
     return null;
   }
 
-  function collectCoords(value, url, path = [], seen = new WeakSet(), found = []) {
+  function collectCoords(value, url, path = [], seen = new WeakSet(), found = [], depth = 0) {
+    if (depth > 10) return found; // Prevent deep recursion lag
     if (!value || typeof value !== "object" || seen.has(value)) return found;
     seen.add(value);
 
@@ -110,9 +111,9 @@
     }
 
     if (Array.isArray(value)) {
-      value.forEach((item, index) => collectCoords(item, url, path.concat(index), seen, found));
+      value.forEach((item, index) => collectCoords(item, url, path.concat(index), seen, found, depth + 1));
     } else {
-      Object.entries(value).forEach(([key, item]) => collectCoords(item, url, path.concat(key), seen, found));
+      Object.entries(value).forEach(([key, item]) => collectCoords(item, url, path.concat(key), seen, found, depth + 1));
     }
 
     return found;
@@ -182,77 +183,84 @@
   function patchFetch() {
     if (typeof window.fetch !== "function" || window.fetch.__localInjectorPatched) return;
 
-    const originalFetch = window.fetch;
-    window.fetch = function patchedFetch(input, init) {
-      const url = typeof input === "string" ? input : input && input.url;
+    window.fetch = new Proxy(window.fetch, {
+      apply: function(target, thisArg, argumentsList) {
+        const input = argumentsList[0];
+        const url = typeof input === "string" ? input : input && input.url;
 
-      return originalFetch.call(this, input, init).then((response) => {
-        const copy = response.clone();
-        const type = copy.headers && copy.headers.get("content-type");
+        return Reflect.apply(target, thisArg, argumentsList).then((response) => {
+          const copy = response.clone();
+          const type = copy.headers && copy.headers.get("content-type");
 
-        if (!type || type.includes("json")) {
-          copy.text().then((text) => inspectText(text.trim(), url)).catch(() => {});
-        }
+          if (!type || type.includes("json")) {
+            copy.text().then((text) => inspectText(text.trim(), url)).catch(() => {});
+          }
 
-        return response;
-      });
-    };
+          return response;
+        });
+      }
+    });
     window.fetch.__localInjectorPatched = true;
   }
 
   function patchXhr() {
     if (typeof window.XMLHttpRequest !== "function" || window.XMLHttpRequest.__localInjectorPatched) return;
 
-    const OriginalXhr = window.XMLHttpRequest;
+    window.XMLHttpRequest = new Proxy(window.XMLHttpRequest, {
+      construct: function(target, args) {
+        const xhr = new target(...args);
+        let url = "";
 
-    function PatchedXhr() {
-      const xhr = new OriginalXhr();
-      let url = "";
-      const open = xhr.open;
+        xhr.open = new Proxy(xhr.open, {
+          apply: function(openTarget, openThisArg, openArgs) {
+            url = String(openArgs[1] || "");
+            return Reflect.apply(openTarget, openThisArg, openArgs);
+          }
+        });
 
-      xhr.open = function patchedOpen(method, requestUrl) {
-        url = String(requestUrl || "");
-        return open.apply(xhr, arguments);
-      };
+        xhr.addEventListener("load", () => {
+          if (
+            url.startsWith("https://maps.googleapis.com/$rpc/google.internal.maps.mapsjs.v1.MapsJsInternalService/GetMetadata") ||
+            url.startsWith("https://maps.googleapis.com/$rpc/google.internal.maps.mapsjs.v1.MapsJsInternalService/SingleImageSearch")
+          ) {
+            try {
+              inspectGoogleMapsText(xhr.responseText || xhr.response);
+            } catch {
+              // Some responseType values block responseText.
+            }
+            return;
+          }
 
-      xhr.addEventListener("load", () => {
-        if (
-          url.startsWith("https://maps.googleapis.com/$rpc/google.internal.maps.mapsjs.v1.MapsJsInternalService/GetMetadata") ||
-          url.startsWith("https://maps.googleapis.com/$rpc/google.internal.maps.mapsjs.v1.MapsJsInternalService/SingleImageSearch")
-        ) {
+          const type = xhr.getResponseHeader("content-type") || "";
+          if (type && !type.includes("json")) return;
+
+          if (xhr.response && typeof xhr.response === "object") {
+            rememberLocations(collectCoords(xhr.response, url));
+            return;
+          }
+
           try {
-            inspectGoogleMapsText(xhr.responseText || xhr.response);
+            inspectText(String(xhr.responseText || "").trim(), url);
           } catch {
             // Some responseType values block responseText.
           }
-          return;
-        }
+        });
 
-        const type = xhr.getResponseHeader("content-type") || "";
-        if (type && !type.includes("json")) return;
-
-        if (xhr.response && typeof xhr.response === "object") {
-          rememberLocations(collectCoords(xhr.response, url));
-          return;
-        }
-
-        try {
-          inspectText(String(xhr.responseText || "").trim(), url);
-        } catch {
-          // Some responseType values block responseText.
-        }
-      });
-
-      return xhr;
-    }
-
-    PatchedXhr.prototype = OriginalXhr.prototype;
-    window.XMLHttpRequest = PatchedXhr;
+        return xhr;
+      }
+    });
     window.XMLHttpRequest.__localInjectorPatched = true;
   }
 
   function captureMap(map) {
-    if (map && !state.maps.includes(map)) state.maps.push(map);
+    if (map && !state.maps.includes(map)) {
+      state.maps.push(map);
+      // Prevent memory leak by keeping only recent valid maps
+      state.maps = state.maps.filter(m => {
+          try { return m && (m.getContainer ? document.body.contains(m.getContainer()) : true); } 
+          catch { return false; }
+      }).slice(-5);
+    }
   }
 
   function patchMapLibrary(library) {
@@ -320,7 +328,9 @@
     }
   }
 
+  let isDispatching = false;
   function dispatchElementClick(element, clientX, clientY) {
+    if (isDispatching) return;
     const options = {
       bubbles: true,
       cancelable: true,
@@ -336,15 +346,23 @@
       pointerId: 1,
       pointerType: "mouse",
       isPrimary: true,
+      __localInjector: true,
     };
 
-    ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach((type) => {
-      const EventClass = type.startsWith("pointer") && window.PointerEvent ? PointerEvent : MouseEvent;
-      element.dispatchEvent(new EventClass(type, options));
-    });
+    isDispatching = true;
+    try {
+      ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach((type) => {
+        const EventClass = type.startsWith("pointer") && window.PointerEvent ? PointerEvent : MouseEvent;
+        element.dispatchEvent(new EventClass(type, options));
+      });
+    } finally {
+      isDispatching = false;
+    }
   }
 
+  let isMoving = false;
   function dispatchElementMove(element, clientX, clientY) {
+    if (isMoving) return;
     const options = {
       bubbles: true,
       cancelable: true,
@@ -359,12 +377,18 @@
       pointerId: 1,
       pointerType: "mouse",
       isPrimary: true,
+      __localInjector: true,
     };
 
-    ["pointerover", "pointerenter", "pointermove", "mouseover", "mouseenter", "mousemove"].forEach((type) => {
-      const EventClass = type.startsWith("pointer") && window.PointerEvent ? PointerEvent : MouseEvent;
-      element.dispatchEvent(new EventClass(type, options));
-    });
+    isMoving = true;
+    try {
+      ["pointerover", "pointerenter", "pointermove", "mouseover", "mouseenter", "mousemove"].forEach((type) => {
+        const EventClass = type.startsWith("pointer") && window.PointerEvent ? PointerEvent : MouseEvent;
+        element.dispatchEvent(new EventClass(type, options));
+      });
+    } finally {
+      isMoving = false;
+    }
   }
 
   function clickElementChain(element, clientX, clientY) {
@@ -898,6 +922,11 @@
           </div>
           <button data-pnj-place="nearby" type="button">Place range</button>
         </div>
+        <div class="range">
+          <div class="range-title"><span>Exact Score Target (Max 4999)</span></div>
+          <input data-pnj-exact-score type="number" min="0" max="4999" value="4990" style="width:100%; padding:8px; margin-bottom:10px; border-radius:8px; border:none; background:rgba(255,255,255,0.9); font-weight:bold; color: #333;">
+          <button data-pnj-place="exact-score" type="button">Place exact score</button>
+        </div>
         <button data-pnj-refresh type="button">Refresh map</button>
         <iframe data-pnj-map title="Round map"></iframe>
         <small>&copy;<span data-pnj-year></span></small>
@@ -937,7 +966,14 @@
       }
       if (button.dataset.pnjRefresh !== undefined) refreshMap();
       if (button.dataset.pnjPlace) {
-        window.__localInjectorPlace(currentCoord(), button.dataset.pnjPlace, { scoreRange: scoreRange() }).then(refreshMap);
+        let range = scoreRange();
+        if (button.dataset.pnjPlace === "exact-score") {
+          const exactVal = Math.max(0, Math.min(4999, Number(host.querySelector("[data-pnj-exact-score]").value || 4990)));
+          range = { min: exactVal, max: exactVal };
+          window.__localInjectorPlace(currentCoord(), "nearby", { scoreRange: range }).then(refreshMap);
+        } else {
+          window.__localInjectorPlace(currentCoord(), button.dataset.pnjPlace, { scoreRange: range }).then(refreshMap);
+        }
       }
     });
     window.addEventListener("local-injector:location", refreshMap);
