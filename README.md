@@ -35,6 +35,8 @@ Looking for free challenge links? Check out our companion web containing a curat
 
 ## Preview
 
+![PNJ GeoGuessr Tools demo](web/public/video.gif)
+
 ![PNJ GeoGuessr Tools popup](images/image1.png)
 
 ![PNJ GeoGuessr Tools range](images/image2.png)

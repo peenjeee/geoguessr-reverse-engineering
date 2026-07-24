@@ -140,6 +140,7 @@ function App() {
       </section>
 
       <section className="gallery" aria-label="Screenshots">
+        <img src="/video.gif" alt="PNJ GeoGuessr Tools video demo" />
         <img src={imageOne} alt="PNJ GeoGuessr Tools popup screenshot" />
         <img src={imageTwo} alt="PNJ GeoGuessr Tools range screenshot" />
         <img src={imageThree} alt="PNJ GeoGuessr Tools map screenshot" />
