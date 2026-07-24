@@ -98,7 +98,7 @@
   }
 
   function collectCoords(value, url, path = [], seen = new WeakSet(), found = [], depth = 0) {
-    if (depth > 10) return found; // Prevent deep recursion lag
+    if (depth > 30) return found; // Increased depth limit to prevent cutting off valid data
     if (!value || typeof value !== "object" || seen.has(value)) return found;
     seen.add(value);
 
@@ -636,11 +636,23 @@
     return called;
   }
 
+  function findReactMapClick(fiber) {
+    let current = fiber;
+    let depth = 0;
+    while (current && depth < 20) {
+      const click = current?.memoizedProps?.map?.__e3_?.click;
+      if (click) return click;
+      current = current.return;
+      depth++;
+    }
+    return null;
+  }
+
   function placeViaReactMap(coord) {
     const element = document.querySelector('[class^="guess-map_canvas__"]');
     if (element) {
       const fiber = element[reactFiberKey(element)];
-      const mapClick = fiber?.return?.return?.memoizedProps?.map?.__e3_?.click;
+      const mapClick = findReactMapClick(fiber);
 
       if (callReactMapHandlers(mapClick, coord)) return true;
     }
@@ -648,7 +660,7 @@
     const streakElement = document.getElementsByClassName("region-map_mapCanvas__0dWlf")[0];
     if (streakElement) {
       const fiber = streakElement[reactFiberKey(streakElement)];
-      const mapClick = fiber?.return?.return?.memoizedProps?.map?.__e3_?.click;
+      const mapClick = findReactMapClick(fiber);
 
       if (callReactMapHandlers(mapClick, coord, true)) return true;
     }
