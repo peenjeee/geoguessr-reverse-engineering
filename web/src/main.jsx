@@ -12,7 +12,6 @@ const features = [
   ["Built-in Auto Bot", "Farm EXP seamlessly in the background with auto-guess and auto-next round."],
   ["Place exact", "Drop the pin on the captured round location."],
   ["Place nearby", "Choose a score range and place close enough."],
-  ["Refresh map", "Preview the round location inside the popup."],
   ["Browser mode", "Open the tools in the Chrome or Brave side panel."],
   ["PWA mode", "Use the in-page PNJ launcher when GeoGuessr runs as an installed app."],
   ["Fallback ready", "If the side panel cannot open, the page launcher appears automatically."]
@@ -102,18 +101,20 @@ function App() {
       <section className="mode-band" aria-label="Companion tools and resources">
         <article style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
-            <p className="eyebrow">Fully Integrated</p>
-            <h2>Built-in Auto Bot</h2>
+            <p className="eyebrow">Standalone Userscript</p>
+            <h2>Tampermonkey Userscript</h2>
             <p>
-              Looking to automate your GeoGuessr farming? No need for external scripts anymore! The Auto-GeoGuessr Bot is now natively built into the extension. Just toggle the "AUTO BOT" button to farm EXP seamlessly in the background.
+              Prefer running standalone without installing Chrome extension developer files? Use our official Tampermonkey Userscript featuring the full interactive UI panel, MapCN engine, and Auto Bot.
             </p>
           </div>
           <div className="actions" style={{ marginTop: "1.5rem" }}>
             <a
               className="button primary"
-              href="#install"
+              href="https://github.com/peenjeee/auto-geoguessr"
+              target="_blank"
+              rel="noreferrer"
             >
-              Install Extension
+              Userscript Repo
             </a>
           </div>
         </article>
