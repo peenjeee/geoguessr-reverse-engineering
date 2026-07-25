@@ -220,6 +220,36 @@ async function toggleAutoBot() {
   updateAutoBotUi(newState);
 }
 
+async function copyUserId() {
+  const tab = await activeTab();
+  if (!tab?.id || !allowedPage.test(tab.url || "")) {
+    statusBox.textContent = "open GeoGuessr first";
+    return;
+  }
+
+  await inject(tab, "internal.js", "MAIN");
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    world: "MAIN",
+    func: () => {
+      const id = localStorage.getItem("pnj_user_id") || "";
+      const coord = window.__pnjCmdStatus?.().current || window.__pnjState?.current;
+      if (coord && typeof coord.lat === "number" && typeof coord.lng === "number") {
+        window.__pnjBroadcastToWeb?.(coord);
+      }
+      return id;
+    },
+  });
+  const id = result?.result;
+  if (!id) {
+    statusBox.textContent = "no user id yet";
+    return;
+  }
+
+  await navigator.clipboard.writeText(id);
+  statusBox.textContent = "ID copied";
+}
+
 async function hidePagePanel() {
   const tab = await activeTab();
   if (!tab?.id || !allowedPage.test(tab.url || "")) return;
@@ -241,6 +271,13 @@ document.addEventListener("click", (event) => {
 
   if (event.target.closest("[data-autobot]")) {
     toggleAutoBot().catch((error) => {
+      statusBox.textContent = error.message;
+    });
+    return;
+  }
+
+  if (event.target.closest("[data-copy-id]")) {
+    copyUserId().catch((error) => {
       statusBox.textContent = error.message;
     });
     return;
@@ -297,6 +334,11 @@ if (nearbySlider && nearbyMin && nearbyMax) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender) => {
+  if (message?.type === "pnj-close-panel") {
+    if (!message.tabId || message.tabId === targetTabId || !targetTabId) window.close();
+    return;
+  }
+
   if (message?.type !== "pnj-location") return;
   if (Number.isInteger(targetTabId) && targetTabId > 0 && sender.tab?.id !== targetTabId) return;
 

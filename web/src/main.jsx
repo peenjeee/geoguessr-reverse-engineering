@@ -9,12 +9,12 @@ import pwaTwo from "../../images/pwa2.png";
 import "./styles.css";
 
 const features = [
+  ["Copy ID", "Copy the PNJ user ID used by the web resolver to show your active round."],
+  ["Live telemetry", "Send active round data to localhost or gr.0xpnj.dev automatically."],
   ["Built-in Auto Bot", "Farm EXP seamlessly in the background with auto-guess and auto-next round."],
   ["Place exact", "Drop the pin on the captured round location."],
   ["Place nearby", "Choose a score range and place close enough."],
-  ["Browser mode", "Open the tools in the Chrome or Brave side panel."],
-  ["PWA mode", "Use the in-page PNJ launcher when GeoGuessr runs as an installed app."],
-  ["Fallback ready", "If the side panel cannot open, the page launcher appears automatically."]
+  ["PWA fallback", "Use the in-page PNJ launcher when GeoGuessr runs as an installed app."]
 ];
 
 const repoUrl = "https://github.com/peenjeee/geoguessr-reverse-engineering";
@@ -66,8 +66,8 @@ function App() {
           <p className="eyebrow">Chrome extension helper</p>
           <h1>PNJ GeoGuessr Tools</h1>
           <p className="lead">
-            A fast GeoGuessr helper with exact placement, adjustable nearby
-            score range, and a map preview built into the popup.
+            Chrome extension tools for GeoGuessr with Copy ID, live round telemetry,
+            exact placement, score range controls, auto bot, and map preview.
           </p>
           <div className="actions">
             <a
@@ -101,10 +101,29 @@ function App() {
       <section className="mode-band" aria-label="Companion tools and resources">
         <article style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
-            <p className="eyebrow">Standalone Userscript</p>
-            <h2>Tampermonkey Userscript</h2>
+            <p className="eyebrow">Web resolver</p>
+            <h2>PNJ GeoResolver Web</h2>
             <p>
-              Prefer running standalone without installing Chrome extension developer files? Use our official Tampermonkey Userscript featuring the full interactive UI panel, MapCN engine, and Auto Bot.
+              Paste your copied PNJ user ID and view the active GeoGuessr round map plus location details.
+            </p>
+          </div>
+          <div className="actions" style={{ marginTop: "1.5rem" }}>
+            <a
+              className="button primary"
+              href="https://gr.0xpnj.dev"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open Resolver
+            </a>
+          </div>
+        </article>
+        <article style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div>
+            <p className="eyebrow">Standalone userscript</p>
+            <h2>PNJ GeoGuessr Userscript</h2>
+            <p>
+              Prefer Tampermonkey? Use the standalone userscript with Copy ID, panel toggle, telemetry, and auto bot.
             </p>
           </div>
           <div className="actions" style={{ marginTop: "1.5rem" }}>
@@ -120,10 +139,10 @@ function App() {
         </article>
         <article style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
-            <p className="eyebrow">Free Challenges</p>
-            <h2>GeoGuessr Free Challenges</h2>
+            <p className="eyebrow">Free challenges</p>
+            <h2>Challenge Links</h2>
             <p>
-              Need free challenge links? Visit our companion website containing a curated collection of free GeoGuessr challenge links so you can play without a subscription.
+              Browse free GeoGuessr challenge links from the companion challenge website.
             </p>
           </div>
           <div className="actions" style={{ marginTop: "1.5rem" }}>
@@ -133,7 +152,7 @@ function App() {
               target="_blank"
               rel="noreferrer"
             >
-              Free Challenges
+              Open Challenges
             </a>
           </div>
         </article>
@@ -190,7 +209,10 @@ function App() {
             GitHub
           </a>
           <a href="https://github.com/peenjeee/auto-geoguessr" target="_blank" rel="noreferrer">
-            Auto Bot
+            Userscript
+          </a>
+          <a href="https://gr.0xpnj.dev" target="_blank" rel="noreferrer">
+            Resolver
           </a>
           <a href="https://gc.0xpnj.dev" target="_blank" rel="noreferrer">
             Free Challenges

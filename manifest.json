@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PNJ GeoGuessr Tools",
-  "version": "1.0.80",
+  "version": "1.0.90",
   "description": "PNJ GeoGuessr Tools.",
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; frame-src https://www.google.com https://maps.google.com;"
@@ -27,10 +27,11 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["activeTab", "scripting", "sidePanel"],
+  "permissions": ["activeTab", "scripting", "sidePanel", "storage"],
   "host_permissions": [
     "https://geoguessr.com/*",
     "https://*.geoguessr.com/*",
+    "https://gr.0xpnj.dev/*",
     "http://localhost/*",
     "http://127.0.0.1/*",
     "file:///*"
@@ -39,10 +40,7 @@
     {
       "matches": [
         "https://geoguessr.com/*",
-        "https://*.geoguessr.com/*",
-        "http://localhost/*",
-        "http://127.0.0.1/*",
-        "file:///*"
+        "https://*.geoguessr.com/*"
       ],
       "js": ["internal.js"],
       "run_at": "document_start",
@@ -53,10 +51,7 @@
     {
       "matches": [
         "https://geoguessr.com/*",
-        "https://*.geoguessr.com/*",
-        "http://localhost/*",
-        "http://127.0.0.1/*",
-        "file:///*"
+        "https://*.geoguessr.com/*"
       ],
       "js": ["bridge.js"],
       "run_at": "document_start",

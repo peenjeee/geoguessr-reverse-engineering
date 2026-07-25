@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_VERSION = "clean-v9";
+  const SCRIPT_VERSION = "clean-v12";
   const state = (window.__pnjState = window.__pnjState || {
     locations: loadLocations(),
     maps: [],
@@ -10,12 +10,14 @@
     autoBot: false,
   });
 
-  if (window.__pnjInt) return;
+  if (window.__pnjInt && window.__pnjIntVersion === SCRIPT_VERSION) return;
 
   window.__pnjInt = true;
   window.__pnjIntVersion = SCRIPT_VERSION;
 
   const STORE_KEY = "pnj_rnd_loc";
+  const USER_ID_KEY = "pnj_user_id";
+  const DASHBOARD_URL = "https://gr.0xpnj.dev/";
   const MAP_TARGET_SELECTOR = [
     "canvas",
     "[class*='guess-map']",
@@ -28,6 +30,46 @@
 
   function clearBadge() {
     document.getElementById("pnj-internal")?.remove();
+  }
+
+  function generateUserId() {
+    return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>
+      (+c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> +c / 4).toString(16)
+    ).toUpperCase();
+  }
+
+  function getUserId() {
+    let id = localStorage.getItem(USER_ID_KEY);
+    if (id) return id.trim().toUpperCase();
+    id = generateUserId();
+    localStorage.setItem(USER_ID_KEY, id);
+    window.open(`${DASHBOARD_URL}?id=${id}`, "_blank");
+    return id;
+  }
+
+  const userId = getUserId();
+
+  function copyUserId() {
+    if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(userId);
+    const input = document.createElement("input");
+    input.value = userId;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand("copy");
+    input.remove();
+    return Promise.resolve();
+  }
+
+  let cleanFetch;
+  function sendFetch(url, options) {
+    if (!cleanFetch) {
+      const frame = document.createElement("iframe");
+      frame.style.display = "none";
+      frame.src = "about:blank";
+      (document.body || document.documentElement).appendChild(frame);
+      cleanFetch = frame.contentWindow.fetch.bind(frame.contentWindow);
+    }
+    return cleanFetch(url, options);
   }
 
   function loadLocations() {
@@ -128,6 +170,35 @@
     return found;
   }
 
+  function broadcastToWeb(coord, targetScore = 5000, distanceKm = 0) {
+    const payloadObject = {
+      type: "round_update",
+      userId,
+      lat: coord.lat,
+      lng: coord.lng,
+      targetScore: targetScore,
+      distanceKm: distanceKm
+    };
+    const payload = JSON.stringify(payloadObject);
+
+    window.dispatchEvent(new CustomEvent("pnj_telemetry", { detail: payloadObject }));
+    window.postMessage({ type: "pnj-telemetry", payload: payloadObject }, "*");
+
+    try {
+      ["http://localhost:3000/api/telemetry", "https://gr.0xpnj.dev/api/telemetry"].forEach((url) => sendFetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload
+      }).catch(() => {}));
+    } catch (e) { }
+
+    try {
+      const channel = new BroadcastChannel("pnj_geoguessr_channel");
+      channel.postMessage(JSON.parse(payload));
+      channel.close();
+    } catch (e) { }
+  }
+
   function rememberLocations(candidates) {
     candidates
       .sort((left, right) => left.score - right.score)
@@ -150,6 +221,7 @@
       const round = state.current.round ? `R${state.current.round} ` : "";
       clearBadge();
       window.dispatchEvent(new CustomEvent("pnj_loc_upd", { detail: state.current }));
+      broadcastToWeb(state.current);
     }
   }
 
@@ -186,6 +258,7 @@
     saveLocations();
     clearBadge();
     window.dispatchEvent(new CustomEvent("pnj_loc_upd", { detail: state.current }));
+    broadcastToWeb(state.current);
   }
 
   function inspectGoogleMapsText(text) {
@@ -266,21 +339,21 @@
         const input = argumentsList[0];
         const url = typeof input === "string" ? input : input && input.url;
 
-        return Reflect.apply(target, thisArg, argumentsList).then((response) => {
+        const request = Reflect.apply(target, thisArg, argumentsList);
+        request.then((response) => {
           const copy = response.clone();
           const type = copy.headers && copy.headers.get("content-type");
 
           if (url && url.includes("maps.googleapis.com") && (url.includes("GetMetadata") || url.includes("SingleImageSearch"))) {
             copy.text().then((text) => inspectGoogleMapsText(text)).catch(() => { });
-            return response;
+            return;
           }
 
           if (!type || type.includes("json")) {
             copy.text().then((text) => inspectText(text.trim(), url)).catch(() => { });
           }
-
-          return response;
-        });
+        }).catch(() => { });
+        return request;
       }
     });
     patchedGlobals.add(window.fetch);
@@ -953,8 +1026,18 @@
     );
   }
 
+  function togglePwaPanelVisibility() {
+    const panel = document.getElementById("pnj-pwa-panel");
+    if (!panel) {
+      ensurePwaPanel(true);
+      return;
+    }
+    panel.remove();
+  }
+
   function ensurePwaPanel(force = false) {
-    if (window.top !== window || (!force && !isPwaWindow()) || document.getElementById("pnj-pwa-panel")) return;
+    if (window.top !== window || (!force && !isPwaWindow())) return;
+    document.getElementById("pnj-pwa-panel")?.remove();
 
     const host = document.createElement("div");
     host.id = "pnj-pwa-panel";
@@ -1113,6 +1196,7 @@
       <div class="panel">
         <h2>PNJ GeoGuessr Tools</h2>
         <button data-pnj-toggle type="button">Close</button>
+        <button data-pnj-copy-id type="button">Copy ID</button>
         <button data-pnj-autobot type="button" style="margin-bottom: 15px;">AUTO BOT: OFF</button>
         <button data-pnj-place="exact" type="button">Place exact</button>
         <div class="range">
@@ -1163,9 +1247,15 @@
         valMaxInput.value = range.max;
       }
     };
+    let lastMapSrc = "";
     const refreshMap = () => {
       const coord = currentCoord();
-      if (isCoord(coord)) mapFrame.src = `https://maps.google.com/maps?q=${coord.lat},${coord.lng}&z=6&output=embed`;
+      if (!isCoord(coord)) return;
+      const src = `https://maps.google.com/maps?q=${coord.lat},${coord.lng}&z=6&output=embed`;
+      if (src !== lastMapSrc) {
+        lastMapSrc = src;
+        mapFrame.src = src;
+      }
     };
 
     const updateAutoBotButton = () => {
@@ -1191,6 +1281,15 @@
       if (button.dataset.pnjToggle !== undefined) {
         host.dataset.open = String(host.dataset.open !== "true");
         refreshMap();
+        return;
+      }
+      if (button.dataset.pnjCopyId !== undefined) {
+        const coord = currentCoord();
+        if (isCoord(coord)) broadcastToWeb(coord);
+        copyUserId().then(() => {
+          button.textContent = "Copied";
+          setTimeout(() => { button.textContent = "Copy ID"; }, 900);
+        });
         return;
       }
       if (button.dataset.pnjAutobot !== undefined) {
@@ -1219,8 +1318,19 @@
 
   document.documentElement.dataset.pnjInt = "ready";
   clearBadge();
+  window.__pnjBroadcastToWeb = broadcastToWeb;
   window.__pnjShowPanel = () => ensurePwaPanel(true);
   window.__pnjHidePanel = () => document.getElementById("pnj-pwa-panel")?.remove();
+  window.addEventListener("keydown", (event) => {
+    const target = event.target;
+    if (target && /input|textarea|select/i.test(target.tagName)) return;
+    if (event.key === "Delete" && !event.repeat) {
+      togglePwaPanelVisibility();
+      return;
+    }
+    if (event.key !== "Insert" || event.repeat) return;
+    window.postMessage({ type: "pnj-open-panel" }, "*");
+  });
   ensurePwaPanel();
   window.addEventListener("DOMContentLoaded", ensurePwaPanel, { once: true });
   window.addEventListener("DOMContentLoaded", clearBadge, { once: true });
@@ -1229,5 +1339,9 @@
   hookMapLibrary("google");
   hookMapLibrary("mapboxgl");
   hookMapLibrary("maplibregl");
+  setTimeout(() => {
+    const coord = currentCoord();
+    if (isCoord(coord)) broadcastToWeb(coord);
+  }, 1000);
   window.dispatchEvent(new CustomEvent("pnj_int_rdy"));
 })();

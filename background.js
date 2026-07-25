@@ -1,3 +1,5 @@
+const sidePanelTabs = new Set();
+
 function openPopup(path) {
   chrome.windows.create({
     url: chrome.runtime.getURL(path),
@@ -55,8 +57,45 @@ chrome.action.onClicked.addListener(async (tab) => {
 
   try {
     await chrome.sidePanel.open({ tabId: tab.id });
+    sidePanelTabs.add(tab.id);
     await hidePagePanel(tab);
   } catch {
     showPagePanel(tab, popupPath);
   }
+});
+
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (message?.type === "pnj-open-panel") {
+    const tabId = sender.tab?.id;
+    if (!chrome.sidePanel || !tabId) {
+      showPagePanel(sender.tab, tabId ? `popup.html?targetTabId=${tabId}` : "popup.html");
+      return;
+    }
+    if (sidePanelTabs.has(tabId)) {
+      chrome.sidePanel.close({ tabId }).catch(() => {});
+      chrome.runtime.sendMessage({ type: "pnj-close-panel", tabId }).catch(() => {});
+      sidePanelTabs.delete(tabId);
+      return;
+    }
+    chrome.sidePanel.open({ tabId })
+      .then(() => { sidePanelTabs.add(tabId); })
+      .catch(() => showPagePanel(sender.tab, `popup.html?targetTabId=${tabId}`));
+    hidePagePanel(sender.tab);
+    return;
+  }
+
+  if (message?.type !== "pnj-telemetry" || !message.payload) return;
+
+  const body = JSON.stringify(message.payload);
+  ["http://localhost:3000/api/telemetry", "https://gr.0xpnj.dev/api/telemetry"].forEach((url) => {
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    }).catch(() => {});
+  });
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  sidePanelTabs.delete(tabId);
 });
