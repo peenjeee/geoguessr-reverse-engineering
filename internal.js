@@ -7,7 +7,7 @@
     current: null,
     lastGoogleCoord: null,
     mapScale: null,
-    autoBot: localStorage.getItem("pnj_auto_bot") === "true",
+    autoBot: false,
   });
 
   if (window.__pnjInt) return;
