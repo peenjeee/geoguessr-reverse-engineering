@@ -921,12 +921,12 @@
       const host = pwaPanel?.shadowRoot;
       const minInput = host?.querySelector("[data-pnj-min]");
       const maxInput = host?.querySelector("[data-pnj-max]");
-      let range = { min: 0, max: 5000 };
-    if (minInput && maxInput) {
-      const min = Math.max(0, Math.min(5000, Number(minInput.value || 4500)));
-      const max = Math.max(0, Math.min(5000, Number(maxInput.value || 5000)));
-      range = { min: Math.min(min, max), max: Math.max(min, max) };
-    }
+      let range = { min: 4500, max: 5000 };
+      if (minInput && maxInput) {
+        const min = Math.max(0, Math.min(5000, Number(minInput.value || 4500)));
+        const max = Math.max(0, Math.min(5000, Number(maxInput.value || 5000)));
+        range = { min: Math.min(min, max), max: Math.max(min, max) };
+      }
 
     await window.__pnjCmdPlace(coord, "nearby", { scoreRange: range });
     await new Promise(r => setTimeout(r, 800));
