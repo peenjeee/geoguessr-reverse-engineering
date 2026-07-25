@@ -9,6 +9,7 @@ import pwaTwo from "../../images/pwa2.png";
 import "./styles.css";
 
 const features = [
+  ["Built-in Auto Bot", "Farm EXP seamlessly in the background with auto-guess and auto-next round."],
   ["Place exact", "Drop the pin on the captured round location."],
   ["Place nearby", "Choose a score range and place close enough."],
   ["Refresh map", "Preview the round location inside the popup."],
@@ -101,20 +102,18 @@ function App() {
       <section className="mode-band" aria-label="Companion tools and resources">
         <article style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
-            <p className="eyebrow">Companion Userscript</p>
-            <h2>Auto-GeoGuessr Bot</h2>
+            <p className="eyebrow">Fully Integrated</p>
+            <h2>Built-in Auto Bot</h2>
             <p>
-              Looking to automate your GeoGuessr farming? We have a companion Tampermonkey Userscript that automatically clicks the PNJ buttons and cycles through rounds entirely on its own! It farms EXP seamlessly in the background.
+              Looking to automate your GeoGuessr farming? No need for external scripts anymore! The Auto-GeoGuessr Bot is now natively built into the extension. Just toggle the "AUTO BOT" button to farm EXP seamlessly in the background.
             </p>
           </div>
           <div className="actions" style={{ marginTop: "1.5rem" }}>
             <a
               className="button primary"
-              href="https://github.com/peenjeee/auto-geoguessr"
-              target="_blank"
-              rel="noreferrer"
+              href="#install"
             >
-              Get Auto Bot
+              Install Extension
             </a>
           </div>
         </article>

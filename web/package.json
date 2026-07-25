@@ -1,6 +1,6 @@
 {
   "name": "pnj-geoguessr-tools-web",
-  "version": "1.0.60",
+  "version": "1.0.80",
   "private": true,
   "type": "module",
   "scripts": {
