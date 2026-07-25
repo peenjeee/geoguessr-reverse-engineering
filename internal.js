@@ -5,6 +5,7 @@
     maps: [],
     source: "stored",
     current: null,
+    lastGoogleCoord: null,
   });
 
   if (window.__pnjInt) return;
@@ -121,8 +122,6 @@
   }
 
   function rememberLocations(candidates) {
-    if (state.source === "google") return;
-
     candidates
       .sort((left, right) => right.score - left.score)
       .forEach((coord) => {
@@ -147,8 +146,27 @@
     }
   }
 
+  function distanceKm(lat1, lng1, lat2, lng2) {
+    const r = 6371;
+    const p = Math.PI / 180;
+    const a = 0.5 - Math.cos((lat2 - lat1) * p) / 2
+                  + Math.cos(lat1 * p) * Math.cos(lat2 * p) *
+                    (1 - Math.cos((lng2 - lng1) * p)) / 2;
+    return 2 * r * Math.asin(Math.sqrt(a));
+  }
+
   function rememberLocation(coord, round = null) {
     if (!isCoord(coord)) return;
+
+    if (state.lastGoogleCoord) {
+      const dist = distanceKm(state.lastGoogleCoord.lat, state.lastGoogleCoord.lng, coord.lat, coord.lng);
+      state.lastGoogleCoord = coord;
+      if (dist < 0.2) { // Less than 200m is considered a step in the same panorama
+        return;
+      }
+    } else {
+      state.lastGoogleCoord = coord;
+    }
 
     const existing = state.locations.find(
       (item) => Math.abs(item.lat - coord.lat) < 0.000001 && Math.abs(item.lng - coord.lng) < 0.000001,
