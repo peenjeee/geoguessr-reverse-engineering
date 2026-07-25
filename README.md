@@ -13,18 +13,10 @@ cd geoguessr-reverse-engineering
 
 - **Built-in Auto Bot**: Farm EXP seamlessly in the background with auto-guess and auto-next round.
 - **Place exact**: Drop the pin on the captured round location.
-- **Place nearby**: Choose a score range and place close enough.
-- **Refresh map**: Preview the round location for the current round.
+- **Place range**: Choose a score range (0 - 5000) and place close enough.
+- **MapLibre GL / MapCN Engine**: Smooth light vector map preview.
 - **Browser side panel**: For normal Chrome/Brave tabs.
 - **In-page PWA launcher**: Fallback for installed GeoGuessr PWA windows.
-
-## Built-in Auto Bot
-
-No need for external Tampermonkey scripts anymore! The Auto-GeoGuessr Bot is now natively built into the extension. Just click the "AUTO BOT" button in the extension panel to toggle it on.
-
-- **Farms EXP seamlessly** in the background.
-- **Auto places the pin & guesses** based on your score range.
-- **Automatically plays the next round**.
 
 ## Free GeoGuessr Challenge Links
 
