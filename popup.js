@@ -335,7 +335,9 @@ if (nearbySlider && nearbyMin && nearbyMax) {
 
 chrome.runtime.onMessage.addListener((message, sender) => {
   if (message?.type === "pnj-close-panel") {
-    if (!message.tabId || message.tabId === targetTabId || !targetTabId) window.close();
+    if (!message.tabId || message.tabId === targetTabId || !targetTabId) {
+      document.documentElement.innerHTML = '<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{margin:0;padding:0;box-sizing:border-box}html,body{height:100%}body{display:flex;align-items:center;justify-content:center;background:#1a1a2e;color:#666;font:11px/1.4 system-ui,sans-serif;user-select:none}span{opacity:0;animation:fade 2s ease forwards}@keyframes fade{to{opacity:1}}</style></head><body><span>Press <kbd>Insert</kbd> to open PNJ Tools</span></body>';
+    }
     return;
   }
 
