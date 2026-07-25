@@ -76,7 +76,7 @@ function formatStatus(data) {
 }
 
 function nearbyScoreRange() {
-  let min = Math.max(0, Math.min(5000, Number(nearbyMin?.value || 0)));
+  let min = Math.max(0, Math.min(5000, Number(nearbyMin?.value || 4500)));
   let max = Math.max(0, Math.min(5000, Number(nearbyMax?.value || 5000)));
   return { min: Math.min(min, max), max: Math.max(min, max) };
 }

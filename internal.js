@@ -78,12 +78,17 @@
   function pathScore(path, url) {
     const urlText = String(url || "").toLowerCase();
     const pathText = path.join(".").toLowerCase();
-    const text = `${urlText} ${pathText}`;
     let score = 0;
 
-    if (/round|game|challenge|duel/.test(text)) score += 4;
-    if (/answer|correct|location|pano/.test(text)) score += 4;
-    if (/guess|pin|player|participant|bounds|viewport|mapbounds/.test(pathText)) score -= 8;
+    if (/round|game|challenge|duel/.test(urlText)) score += 4;
+    if (/answer|correct|location|pano/.test(urlText)) score += 4;
+    
+    if (/round/.test(pathText)) score += 10;
+    if (/answer|correct|location|pano/.test(pathText)) score += 10;
+    
+    if (/guess|pin|player|participant|bounds|viewport|mapbounds/.test(pathText)) score -= 20;
+    if (/map/.test(pathText) && !/round|answer|pano/.test(pathText)) score -= 10;
+    
     if (/\/maps?\//.test(urlText)) score -= 6;
 
     return score;
@@ -125,7 +130,7 @@
 
   function rememberLocations(candidates) {
     candidates
-      .sort((left, right) => right.score - left.score)
+      .sort((left, right) => left.score - right.score)
       .forEach((coord) => {
         const existing = state.locations.find(
           (item) =>
@@ -233,7 +238,19 @@
         const diagonal = distanceKm(bounds.min.lat, bounds.min.lng, bounds.max.lat, bounds.max.lng);
         state.mapScale = diagonal > 15000 ? 1492.7 : Math.max(5, diagonal / 10);
       }
-      rememberLocations(collectCoords(json, url));
+      
+      const currentRound = (json && typeof json === 'object') ? (json.round || (json.payload && json.payload.round) || null) : null;
+      let candidates = collectCoords(json, url);
+      
+      if (currentRound !== null) {
+          candidates.forEach(c => {
+              if (c.round === currentRound) {
+                  c.score += 1000;
+              }
+          });
+      }
+      
+      rememberLocations(candidates);
     } catch {
       // Not JSON.
     }
@@ -906,7 +923,7 @@
       const maxInput = host?.querySelector("[data-pnj-max]");
       let range = { min: 0, max: 5000 };
     if (minInput && maxInput) {
-      const min = Math.max(0, Math.min(5000, Number(minInput.value || 0)));
+      const min = Math.max(0, Math.min(5000, Number(minInput.value || 4500)));
       const max = Math.max(0, Math.min(5000, Number(maxInput.value || 5000)));
       range = { min: Math.min(min, max), max: Math.max(min, max) };
     }
@@ -1089,13 +1106,13 @@
           <div class="range-title">
             <span>Score range</span>
             <div style="display: flex; gap: 4px; align-items: center;">
-              <input data-pnj-val-min type="number" min="0" max="5000" step="1" value="0" style="width: 55px; background: transparent; border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 4px; text-align: center; font-family: inherit; font-weight: bold;">
+              <input data-pnj-val-min type="number" min="0" max="5000" step="1" value="4500" style="width: 55px; background: transparent; border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 4px; text-align: center; font-family: inherit; font-weight: bold;">
               <span>-</span>
               <input data-pnj-val-max type="number" min="0" max="5000" step="1" value="5000" style="width: 55px; background: transparent; border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 4px; text-align: center; font-family: inherit; font-weight: bold;">
             </div>
           </div>
           <div class="range-slider" data-pnj-slider>
-            <input data-pnj-min type="range" min="0" max="5000" step="1" value="0">
+            <input data-pnj-min type="range" min="0" max="5000" step="1" value="4500">
             <input data-pnj-max type="range" min="0" max="5000" step="1" value="5000">
           </div>
           <button data-pnj-place="nearby" type="button">Place range</button>
@@ -1118,7 +1135,7 @@
     const rangeSlider = host.querySelector("[data-pnj-slider]");
     const mapFrame = host.querySelector("[data-pnj-map]");
     const scoreRange = () => {
-      let min = Math.max(0, Math.min(5000, Number(minInput.value || 0)));
+      let min = Math.max(0, Math.min(5000, Number(minInput.value || 4500)));
       let max = Math.max(0, Math.min(5000, Number(maxInput.value || 5000)));
       return { min: Math.min(min, max), max: Math.max(min, max) };
     };
