@@ -2,7 +2,8 @@ const statusBox = document.getElementById("status");
 const nearbySlider = document.getElementById("nearby-slider");
 const nearbyMin = document.getElementById("nearby-min");
 const nearbyMax = document.getElementById("nearby-max");
-const nearbyValue = document.getElementById("nearby-value");
+const nearbyValMin = document.getElementById("nearby-val-min");
+const nearbyValMax = document.getElementById("nearby-val-max");
 const mapPanel = document.getElementById("map-panel");
 const mapFrame = document.getElementById("map-frame");
 const copyrightYear = document.getElementById("copyright-year");
@@ -75,24 +76,20 @@ function formatStatus(data) {
 }
 
 function nearbyScoreRange() {
-  let min = Math.max(0, Math.min(5000, Number(nearbyMin?.value || 4500)));
-  let max = Math.max(0, Math.min(5000, Number(nearbyMax?.value || 4900)));
-
-  if (nearbyMin && nearbyMax && min > max) {
-    if (document.activeElement === nearbyMin) max = min;
-    else min = max;
-    nearbyMin.value = min;
-    nearbyMax.value = max;
-  }
-
-  return { min, max };
+  let min = Math.max(0, Math.min(5000, Number(nearbyMin?.value || 0)));
+  let max = Math.max(0, Math.min(5000, Number(nearbyMax?.value || 5000)));
+  return { min: Math.min(min, max), max: Math.max(min, max) };
 }
 
-function updateNearbyValue() {
+function updateNearbyValue(e) {
+  const isFromNumberBox = e && (e.target === nearbyValMin || e.target === nearbyValMax);
   const range = nearbyScoreRange();
   nearbySlider?.style.setProperty("--range-left", `${range.min / 50}%`);
   nearbySlider?.style.setProperty("--range-right", `${range.max / 50}%`);
-  if (nearbyValue) nearbyValue.textContent = `${range.min}-${range.max}`;
+  if (!isFromNumberBox) {
+    if (nearbyValMin) nearbyValMin.value = range.min;
+    if (nearbyValMax) nearbyValMax.value = range.max;
+  }
 }
 
 function scoreFromPointer(event) {
@@ -257,7 +254,25 @@ document.addEventListener("click", (event) => {
   });
 });
 
-[nearbyMin, nearbyMax].filter(Boolean).forEach((input) => input.addEventListener("input", updateNearbyValue));
+[nearbyMin, nearbyMax, nearbyValMin, nearbyValMax].filter(Boolean).forEach((input) => {
+  input.addEventListener("input", (e) => {
+    if (e.target === nearbyValMin || e.target === nearbyValMax) {
+      if (Number(e.target.value) > 5000) e.target.value = 5000;
+      if (Number(e.target.value) < 0 && e.target.value !== "") e.target.value = 0;
+    }
+    if (e.target === nearbyValMin && nearbyMin) nearbyMin.value = nearbyValMin.value;
+    if (e.target === nearbyValMax && nearbyMax) nearbyMax.value = nearbyValMax.value;
+    updateNearbyValue(e);
+  });
+  
+  if (input === nearbyValMin || input === nearbyValMax) {
+    input.addEventListener("change", () => {
+      const range = nearbyScoreRange();
+      if (nearbyValMin) nearbyValMin.value = range.min;
+      if (nearbyValMax) nearbyValMax.value = range.max;
+    });
+  }
+});
 
 if (nearbySlider && nearbyMin && nearbyMax) {
   nearbySlider.addEventListener("pointerdown", (event) => {

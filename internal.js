@@ -900,12 +900,14 @@
 
     botGuessing = true;
 
-    const minInput = document.querySelector("[data-pnj-min]");
-    const maxInput = document.querySelector("[data-pnj-max]");
-    let range = { min: 4500, max: 4900 };
+      const pwaPanel = document.getElementById("pnj-pwa-panel");
+      const host = pwaPanel?.shadowRoot;
+      const minInput = host?.querySelector("[data-pnj-min]");
+      const maxInput = host?.querySelector("[data-pnj-max]");
+      let range = { min: 0, max: 5000 };
     if (minInput && maxInput) {
-      const min = Math.max(0, Math.min(5000, Number(minInput.value || 4500)));
-      const max = Math.max(0, Math.min(5000, Number(maxInput.value || 4900)));
+      const min = Math.max(0, Math.min(5000, Number(minInput.value || 0)));
+      const max = Math.max(0, Math.min(5000, Number(maxInput.value || 5000)));
       range = { min: Math.min(min, max), max: Math.max(min, max) };
     }
 
@@ -1084,10 +1086,17 @@
         <button data-pnj-autobot type="button" style="margin-bottom: 15px;">AUTO BOT: OFF</button>
         <button data-pnj-place="exact" type="button">Place exact</button>
         <div class="range">
-          <div class="range-title"><span>Score range</span><span data-pnj-range-value>4500-4900</span></div>
+          <div class="range-title">
+            <span>Score range</span>
+            <div style="display: flex; gap: 4px; align-items: center;">
+              <input data-pnj-val-min type="number" min="0" max="5000" step="1" value="0" style="width: 55px; background: transparent; border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 4px; text-align: center; font-family: inherit; font-weight: bold;">
+              <span>-</span>
+              <input data-pnj-val-max type="number" min="0" max="5000" step="1" value="5000" style="width: 55px; background: transparent; border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 4px; text-align: center; font-family: inherit; font-weight: bold;">
+            </div>
+          </div>
           <div class="range-slider" data-pnj-slider>
-            <input data-pnj-min type="range" min="0" max="5000" step="50" value="4500">
-            <input data-pnj-max type="range" min="0" max="5000" step="50" value="4900">
+            <input data-pnj-min type="range" min="0" max="5000" step="1" value="0">
+            <input data-pnj-max type="range" min="0" max="5000" step="1" value="5000">
           </div>
           <button data-pnj-place="nearby" type="button">Place range</button>
         </div>
@@ -1104,19 +1113,30 @@
 
     const minInput = host.querySelector("[data-pnj-min]");
     const maxInput = host.querySelector("[data-pnj-max]");
-    const rangeValue = host.querySelector("[data-pnj-range-value]");
+    const valMinInput = host.querySelector("[data-pnj-val-min]");
+    const valMaxInput = host.querySelector("[data-pnj-val-max]");
     const rangeSlider = host.querySelector("[data-pnj-slider]");
     const mapFrame = host.querySelector("[data-pnj-map]");
     const scoreRange = () => {
-      const min = Math.max(0, Math.min(5000, Number(minInput.value || 4500)));
-      const max = Math.max(0, Math.min(5000, Number(maxInput.value || 4900)));
+      let min = Math.max(0, Math.min(5000, Number(minInput.value || 0)));
+      let max = Math.max(0, Math.min(5000, Number(maxInput.value || 5000)));
       return { min: Math.min(min, max), max: Math.max(min, max) };
     };
-    const updateRange = () => {
+    const updateRange = (e) => {
+      const isFromNumberBox = e && (e.target === valMinInput || e.target === valMaxInput);
+      if (isFromNumberBox) {
+        if (Number(e.target.value) > 5000) e.target.value = 5000;
+        if (Number(e.target.value) < 0 && e.target.value !== "") e.target.value = 0;
+        minInput.value = valMinInput.value;
+        maxInput.value = valMaxInput.value;
+      }
       const range = scoreRange();
       rangeSlider.style.setProperty("--range-left", `${range.min / 50}%`);
       rangeSlider.style.setProperty("--range-right", `${range.max / 50}%`);
-      rangeValue.textContent = `${range.min}-${range.max}`;
+      if (!isFromNumberBox) {
+        valMinInput.value = range.min;
+        valMaxInput.value = range.max;
+      }
     };
     const refreshMap = () => {
       const coord = currentCoord();
@@ -1133,6 +1153,13 @@
 
     host.querySelector("[data-pnj-year]").textContent = new Date().getFullYear();
     host.addEventListener("input", updateRange);
+    host.addEventListener("change", (e) => {
+      if (e.target === valMinInput || e.target === valMaxInput) {
+        const range = scoreRange();
+        valMinInput.value = range.min;
+        valMaxInput.value = range.max;
+      }
+    });
     host.addEventListener("click", (event) => {
       const button = event.target.closest("button");
       if (!button) return;
