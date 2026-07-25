@@ -44,6 +44,7 @@ async function statusResults(tab) {
         ready: Boolean(window.__pnjInt),
         current,
         source: state?.source || "unknown",
+        autoBot: Boolean(state?.autoBot),
         locations: state?.locations?.length || 0,
         maps: state?.maps?.length || 0,
         targets: document.querySelectorAll("canvas,[class*='map'],[data-qa*='map'],[aria-label*='Map'],[aria-label*='map']").length,
@@ -177,11 +178,49 @@ async function placePin(mode = "exact") {
   statusBox.textContent = placed?.ok ? "" : `${mode} failed.`;
 }
 
+function updateAutoBotUi(isAutoBot) {
+  const btn = document.getElementById("btn-autobot");
+  if (btn) {
+    btn.textContent = isAutoBot ? "AUTO BOT: ON" : "AUTO BOT: OFF";
+    btn.style.background = isAutoBot ? "linear-gradient(180deg, #00d647, #008f2f)" : "linear-gradient(180deg, #d61a00, #8f1100)";
+  }
+}
+
 async function openMapInPopup() {
   const { data } = await currentRound();
+  if (data) {
+    updateAutoBotUi(data.autoBot);
+  }
   if (!data?.current) return;
 
   setMapCoord(data.current);
+}
+
+async function toggleAutoBot() {
+  const { tab, pickedStatus } = await currentRound();
+  if (!tab?.id) return;
+
+  const target = Number.isInteger(pickedStatus?.frameId)
+    ? { tabId: tab.id, frameIds: [pickedStatus.frameId] }
+    : { tabId: tab.id };
+
+  const results = await chrome.scripting.executeScript({
+    target,
+    world: "MAIN",
+    func: () => {
+      const state = window.__pnjState;
+      if (state) {
+        state.autoBot = !state.autoBot;
+        localStorage.setItem("pnj_auto_bot", state.autoBot ? "true" : "false");
+        window.dispatchEvent(new CustomEvent("pnj_autobot_upd", { detail: state.autoBot }));
+        return state.autoBot;
+      }
+      return false;
+    },
+  });
+
+  const newState = results?.[0]?.result;
+  updateAutoBotUi(newState);
 }
 
 async function hidePagePanel() {
@@ -198,6 +237,13 @@ async function hidePagePanel() {
 document.addEventListener("click", (event) => {
   if (event.target.closest("[data-map-toggle]")) {
     openMapInPopup().catch((error) => {
+      statusBox.textContent = error.message;
+    });
+    return;
+  }
+
+  if (event.target.closest("[data-autobot]")) {
+    toggleAutoBot().catch((error) => {
       statusBox.textContent = error.message;
     });
     return;
@@ -248,10 +294,10 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     .then((tab) => {
       if (tab?.id === sender.tab?.id) setMapCoord(message.coord);
     })
-    .catch(() => {});
+    .catch(() => { });
 });
 
 updateNearbyValue();
 if (copyrightYear) copyrightYear.textContent = new Date().getFullYear();
-hidePagePanel().catch(() => {});
-openMapInPopup().catch(() => {});
+hidePagePanel().catch(() => { });
+openMapInPopup().catch(() => { });

@@ -7,6 +7,7 @@
     current: null,
     lastGoogleCoord: null,
     mapScale: null,
+    autoBot: localStorage.getItem("pnj_auto_bot") === "true",
   });
 
   if (window.__pnjInt) return;
@@ -151,8 +152,8 @@
     const r = 6371;
     const p = Math.PI / 180;
     const a = 0.5 - Math.cos((lat2 - lat1) * p) / 2
-                  + Math.cos(lat1 * p) * Math.cos(lat2 * p) *
-                    (1 - Math.cos((lng2 - lng1) * p)) / 2;
+      + Math.cos(lat1 * p) * Math.cos(lat2 * p) *
+      (1 - Math.cos((lng2 - lng1) * p)) / 2;
     return 2 * r * Math.asin(Math.sqrt(a));
   }
 
@@ -183,24 +184,29 @@
   }
 
   function inspectGoogleMapsText(text) {
-    const match = String(text || "").match(/-?\d+\.\d+,-?\d+\.\d+/);
-    if (!match) return;
+    const str = String(text || "");
+    const matches = str.matchAll(/-?\d+\.\d+,\s*-?\d+\.\d+/g);
 
-    const [lat, lng] = match[0].split(",").map(Number);
-    rememberLocation({ lat, lng });
+    for (const match of matches) {
+      const [lat, lng] = match[0].split(",").map(Number);
+      if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat !== 0 || lng !== 0)) {
+        rememberLocation({ lat, lng });
+        return;
+      }
+    }
   }
 
   function extractBounds(obj, depth = 0) {
     if (depth > 10 || !obj || typeof obj !== "object") return null;
-    
+
     if (obj.min && obj.max && Number.isFinite(obj.min.lat) && Number.isFinite(obj.max.lat)) {
       return obj;
     }
-    
+
     if (obj.bounds && obj.bounds.min && obj.bounds.max && Number.isFinite(obj.bounds.min.lat)) {
       return obj.bounds;
     }
-    
+
     if (Array.isArray(obj)) {
       for (let i = 0; i < obj.length; i++) {
         const found = extractBounds(obj[i], depth + 1);
@@ -212,7 +218,7 @@
         if (found) return found;
       }
     }
-    
+
     return null;
   }
 
@@ -222,10 +228,10 @@
     try {
       const json = JSON.parse(text);
       const bounds = extractBounds(json);
-      
+
       if (bounds && bounds.min && bounds.max) {
         const diagonal = distanceKm(bounds.min.lat, bounds.min.lng, bounds.max.lat, bounds.max.lng);
-        state.mapScale = Math.max(5, diagonal / 10);
+        state.mapScale = diagonal > 15000 ? 1492.7 : Math.max(5, diagonal / 10);
       }
       rememberLocations(collectCoords(json, url));
     } catch {
@@ -239,7 +245,7 @@
     if (typeof window.fetch !== "function" || patchedGlobals.has(window.fetch)) return;
 
     window.fetch = new Proxy(window.fetch, {
-      apply: function(target, thisArg, argumentsList) {
+      apply: function (target, thisArg, argumentsList) {
         const input = argumentsList[0];
         const url = typeof input === "string" ? input : input && input.url;
 
@@ -247,8 +253,13 @@
           const copy = response.clone();
           const type = copy.headers && copy.headers.get("content-type");
 
+          if (url && url.includes("maps.googleapis.com") && (url.includes("GetMetadata") || url.includes("SingleImageSearch"))) {
+            copy.text().then((text) => inspectGoogleMapsText(text)).catch(() => { });
+            return response;
+          }
+
           if (!type || type.includes("json")) {
-            copy.text().then((text) => inspectText(text.trim(), url)).catch(() => {});
+            copy.text().then((text) => inspectText(text.trim(), url)).catch(() => { });
           }
 
           return response;
@@ -262,12 +273,12 @@
     if (typeof window.XMLHttpRequest !== "function" || patchedGlobals.has(window.XMLHttpRequest)) return;
 
     window.XMLHttpRequest = new Proxy(window.XMLHttpRequest, {
-      construct: function(target, args) {
+      construct: function (target, args) {
         const xhr = new target(...args);
         let url = "";
 
         xhr.open = new Proxy(xhr.open, {
-          apply: function(openTarget, openThisArg, openArgs) {
+          apply: function (openTarget, openThisArg, openArgs) {
             url = String(openArgs[1] || "");
             return Reflect.apply(openTarget, openThisArg, openArgs);
           }
@@ -275,8 +286,8 @@
 
         xhr.addEventListener("load", () => {
           if (
-            url.startsWith("https://maps.googleapis.com/$rpc/google.internal.maps.mapsjs.v1.MapsJsInternalService/GetMetadata") ||
-            url.startsWith("https://maps.googleapis.com/$rpc/google.internal.maps.mapsjs.v1.MapsJsInternalService/SingleImageSearch")
+            url.includes("maps.googleapis.com") &&
+            (url.includes("GetMetadata") || url.includes("SingleImageSearch"))
           ) {
             try {
               inspectGoogleMapsText(xhr.responseText || xhr.response);
@@ -312,26 +323,46 @@
       state.maps.push(map);
       // Prevent memory leak by keeping only recent valid maps
       state.maps = state.maps.filter(m => {
-          try { return m && (m.getContainer ? document.body.contains(m.getContainer()) : true); } 
-          catch { return false; }
+        try { return m && (m.getContainer ? document.body.contains(m.getContainer()) : true); }
+        catch { return false; }
       }).slice(-5);
     }
   }
 
   function patchMapLibrary(library) {
-    if (!library || typeof library.Map !== "function" || patchedGlobals.has(library)) return;
+    if (!library || typeof library === "undefined" || patchedGlobals.has(library)) return;
 
-    const OriginalMap = library.Map;
-
-    function PatchedMap() {
-      const map = Reflect.construct(OriginalMap, arguments, new.target || PatchedMap);
-      captureMap(map);
-      return map;
+    if (typeof library.Map === "function") {
+      const OriginalMap = library.Map;
+      function PatchedMap() {
+        const map = Reflect.construct(OriginalMap, arguments, new.target || PatchedMap);
+        captureMap(map);
+        return map;
+      }
+      Object.setPrototypeOf(PatchedMap, OriginalMap);
+      PatchedMap.prototype = OriginalMap.prototype;
+      library.Map = PatchedMap;
     }
 
-    Object.setPrototypeOf(PatchedMap, OriginalMap);
-    PatchedMap.prototype = OriginalMap.prototype;
-    library.Map = PatchedMap;
+    if (typeof library.StreetViewPanorama === "function") {
+      const OriginalSV = library.StreetViewPanorama;
+      function PatchedSV() {
+        const pano = Reflect.construct(OriginalSV, arguments, new.target || PatchedSV);
+        if (typeof pano.addListener === "function") {
+          pano.addListener("position_changed", () => {
+            const pos = typeof pano.getPosition === "function" ? pano.getPosition() : null;
+            if (pos && typeof pos.lat === "function") {
+              rememberLocation({ lat: pos.lat(), lng: pos.lng() });
+            }
+          });
+        }
+        return pano;
+      }
+      Object.setPrototypeOf(PatchedSV, OriginalSV);
+      PatchedSV.prototype = OriginalSV.prototype;
+      library.StreetViewPanorama = PatchedSV;
+    }
+
     patchedGlobals.add(library);
   }
 
@@ -406,10 +437,10 @@
       const EventClass = type.startsWith("pointer") && window.PointerEvent ? PointerEvent : MouseEvent;
       const event = new EventClass(type, options);
       if (!dispatchedEvents.has(event)) {
-          dispatchedEvents.add(event);
-          try {
-             element.dispatchEvent(event);
-          } catch(e) {}
+        dispatchedEvents.add(event);
+        try {
+          element.dispatchEvent(event);
+        } catch (e) { }
       }
     });
   }
@@ -436,10 +467,10 @@
       const EventClass = type.startsWith("pointer") && window.PointerEvent ? PointerEvent : MouseEvent;
       const event = new EventClass(type, options);
       if (!dispatchedMoveEvents.has(event)) {
-          dispatchedMoveEvents.add(event);
-          try {
-             element.dispatchEvent(event);
-          } catch(e) {}
+        dispatchedMoveEvents.add(event);
+        try {
+          element.dispatchEvent(event);
+        } catch (e) { }
       }
     });
   }
@@ -491,9 +522,8 @@
     const centerY = rect.top + rect.height / 2;
     const pageWidth = window.innerWidth || document.documentElement.clientWidth || rect.right;
     const pageHeight = window.innerHeight || document.documentElement.clientHeight || rect.bottom;
-    const text = `${canvas.id || ""} ${canvas.className || ""} ${canvas.getAttribute("aria-label") || ""} ${
-      canvas.getAttribute("data-qa") || ""
-    }`.toLowerCase();
+    const text = `${canvas.id || ""} ${canvas.className || ""} ${canvas.getAttribute("aria-label") || ""} ${canvas.getAttribute("data-qa") || ""
+      }`.toLowerCase();
     let score = rect.width * rect.height;
 
     if (rect.width < pageWidth * 0.9 && rect.height < pageHeight * 0.9) score += 1000000;
@@ -565,9 +595,8 @@
   }
 
   function textSignal(element) {
-    return `${element.id || ""} ${element.className || ""} ${element.getAttribute("aria-label") || ""} ${
-      element.getAttribute("data-qa") || ""
-    } ${element.textContent || ""}`.toLowerCase();
+    return `${element.id || ""} ${element.className || ""} ${element.getAttribute("aria-label") || ""} ${element.getAttribute("data-qa") || ""
+      } ${element.textContent || ""}`.toLowerCase();
   }
 
   function openGuessMap() {
@@ -640,7 +669,7 @@
     const angularDistance = distanceKm / earthRadiusKm;
     const endLat = Math.asin(
       (Math.sin(startLat) * Math.cos(angularDistance)) +
-        (Math.cos(startLat) * Math.sin(angularDistance) * Math.cos(bearing)),
+      (Math.cos(startLat) * Math.sin(angularDistance) * Math.cos(bearing)),
     );
     const endLng = startLng + Math.atan2(
       Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(startLat),
@@ -822,6 +851,80 @@
     return { ok: placeOnMap(guess), status: window.__pnjCmdStatus() };
   };
 
+  // --- AUTO BOT LOGIC ---
+  function findBtnExact(textTarget) {
+    const allEls = document.querySelectorAll('button, div, span, a');
+    for (let el of allEls) {
+      if (el.textContent && el.textContent.trim().toUpperCase() === textTarget) {
+        if (el.children.length === 0 || el.tagName === 'BUTTON') {
+          return el;
+        }
+      }
+    }
+    return null;
+  }
+
+  function findBtnPartial(keywords) {
+    const btns = document.querySelectorAll('button, a, [role="button"]');
+    for (let btn of btns) {
+      const text = (btn.textContent || "").toUpperCase();
+      if (keywords.some(kw => text.includes(kw))) {
+        return btn;
+      }
+    }
+    return null;
+  }
+
+  let botGuessing = false;
+  let lastAutoGuess = null;
+  setInterval(async () => {
+    if (!state.autoBot) return;
+
+    const nextBtn = document.querySelector('[data-qa="close-round-result"]') ||
+      document.querySelector('[data-qa="play-next-round"]') ||
+      findBtnPartial(['NEXT', 'AGAIN', 'SUMMARY']);
+
+    if (nextBtn) {
+      nextBtn.click();
+      return;
+    }
+
+    if (botGuessing) return;
+
+    const coord = currentCoord();
+    if (!coord || coord === lastAutoGuess) return;
+
+    // Ensure we are in a game view (guessing map canvas exists)
+    const mapCanvas = document.querySelector(MAP_TARGET_SELECTOR);
+    if (!mapCanvas) return;
+
+    botGuessing = true;
+
+    const minInput = document.querySelector("[data-pnj-min]");
+    const maxInput = document.querySelector("[data-pnj-max]");
+    let range = { min: 4500, max: 4900 };
+    if (minInput && maxInput) {
+      const min = Math.max(0, Math.min(5000, Number(minInput.value || 4500)));
+      const max = Math.max(0, Math.min(5000, Number(maxInput.value || 4900)));
+      range = { min: Math.min(min, max), max: Math.max(min, max) };
+    }
+
+    await window.__pnjCmdPlace(coord, "nearby", { scoreRange: range });
+    await new Promise(r => setTimeout(r, 800));
+
+    const freshGuessBtn = document.querySelector('[data-qa="perform-guess"]') ||
+      document.querySelector('.guess-map__guess-button') ||
+      findBtnExact('GUESS');
+
+    if (freshGuessBtn && !freshGuessBtn.disabled) {
+      freshGuessBtn.click();
+      lastAutoGuess = coord;
+    }
+
+    botGuessing = false;
+  }, 2000);
+  // ----------------------
+
   function isPwaWindow() {
     return (
       window.navigator.standalone === true ||
@@ -978,6 +1081,7 @@
       <div class="panel">
         <h2>PNJ GeoGuessr Tools</h2>
         <button data-pnj-toggle type="button">Close</button>
+        <button data-pnj-autobot type="button" style="margin-bottom: 15px;">AUTO BOT: OFF</button>
         <button data-pnj-place="exact" type="button">Place exact</button>
         <div class="range">
           <div class="range-title"><span>Score range</span><span data-pnj-range-value>4500-4900</span></div>
@@ -1019,6 +1123,14 @@
       if (isCoord(coord)) mapFrame.src = `https://maps.google.com/maps?q=${coord.lat},${coord.lng}&z=6&output=embed`;
     };
 
+    const updateAutoBotButton = () => {
+      const btn = host.querySelector("[data-pnj-autobot]");
+      if (btn) {
+        btn.textContent = state.autoBot ? "AUTO BOT: ON" : "AUTO BOT: OFF";
+        btn.style.background = state.autoBot ? "linear-gradient(180deg, #00d647, #008f2f)" : "linear-gradient(180deg, #d61a00, #8f1100)";
+      }
+    };
+
     host.querySelector("[data-pnj-year]").textContent = new Date().getFullYear();
     host.addEventListener("input", updateRange);
     host.addEventListener("click", (event) => {
@@ -1027,6 +1139,13 @@
       if (button.dataset.pnjToggle !== undefined) {
         host.dataset.open = String(host.dataset.open !== "true");
         refreshMap();
+        return;
+      }
+      if (button.dataset.pnjAutobot !== undefined) {
+        state.autoBot = !state.autoBot;
+        localStorage.setItem("pnj_auto_bot", state.autoBot ? "true" : "false");
+        updateAutoBotButton();
+        window.dispatchEvent(new CustomEvent("pnj_autobot_upd", { detail: state.autoBot }));
         return;
       }
       if (button.dataset.pnjRefresh !== undefined) refreshMap();
@@ -1042,8 +1161,13 @@
       }
     });
     window.addEventListener("pnj_loc_upd", refreshMap);
+    window.addEventListener("pnj_autobot_upd", (e) => {
+      state.autoBot = e.detail;
+      updateAutoBotButton();
+    });
 
     updateRange();
+    updateAutoBotButton();
     refreshMap();
     document.documentElement.appendChild(host);
   }
@@ -1057,6 +1181,7 @@
   window.addEventListener("DOMContentLoaded", clearBadge, { once: true });
   patchFetch();
   patchXhr();
+  hookMapLibrary("google");
   hookMapLibrary("mapboxgl");
   hookMapLibrary("maplibregl");
   window.dispatchEvent(new CustomEvent("pnj_int_rdy"));
