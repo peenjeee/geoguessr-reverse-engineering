@@ -6,6 +6,7 @@
     source: "stored",
     current: null,
     lastGoogleCoord: null,
+    mapScale: null,
   });
 
   if (window.__pnjInt) return;
@@ -189,11 +190,44 @@
     rememberLocation({ lat, lng });
   }
 
+  function extractBounds(obj, depth = 0) {
+    if (depth > 10 || !obj || typeof obj !== "object") return null;
+    
+    if (obj.min && obj.max && Number.isFinite(obj.min.lat) && Number.isFinite(obj.max.lat)) {
+      return obj;
+    }
+    
+    if (obj.bounds && obj.bounds.min && obj.bounds.max && Number.isFinite(obj.bounds.min.lat)) {
+      return obj.bounds;
+    }
+    
+    if (Array.isArray(obj)) {
+      for (let i = 0; i < obj.length; i++) {
+        const found = extractBounds(obj[i], depth + 1);
+        if (found) return found;
+      }
+    } else {
+      for (const key of Object.keys(obj)) {
+        const found = extractBounds(obj[key], depth + 1);
+        if (found) return found;
+      }
+    }
+    
+    return null;
+  }
+
   function inspectText(text, url) {
     if (!text || !/[{[]/.test(text[0])) return;
 
     try {
-      rememberLocations(collectCoords(JSON.parse(text), url));
+      const json = JSON.parse(text);
+      const bounds = extractBounds(json);
+      
+      if (bounds && bounds.min && bounds.max) {
+        const diagonal = distanceKm(bounds.min.lat, bounds.min.lng, bounds.max.lat, bounds.max.lng);
+        state.mapScale = Math.max(5, diagonal / 10);
+      }
+      rememberLocations(collectCoords(json, url));
     } catch {
       // Not JSON.
     }
@@ -598,7 +632,7 @@
     const high = Math.max(minScore, maxScore);
     const targetScore = low + Math.random() * (high - low);
     const earthRadiusKm = 6371;
-    const scoreScaleKm = 1492;
+    const scoreScaleKm = state.mapScale || 1492;
     const distanceKm = targetScore > 0 ? -scoreScaleKm * Math.log(targetScore / 5000) : scoreScaleKm * 10;
     const bearing = Math.random() * Math.PI * 2;
     const startLat = (coord.lat * Math.PI) / 180;
