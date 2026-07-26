@@ -132,6 +132,15 @@ async function pushScoreRange() {
       try {
         localStorage.setItem("pnj_score_range", JSON.stringify(range));
       } catch { }
+
+      const panel = document.getElementById("pnj-pwa-panel");
+      const minInput = panel?.querySelector("[data-pnj-min]");
+      const maxInput = panel?.querySelector("[data-pnj-max]");
+      if (minInput && maxInput) {
+        minInput.value = range.min;
+        maxInput.value = range.max;
+        minInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
     },
   });
 }

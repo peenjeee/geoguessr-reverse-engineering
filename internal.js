@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_VERSION = "clean-v21";
+  const SCRIPT_VERSION = "clean-v22";
   const state = (window.__pnjState = window.__pnjState || {
     locations: loadLocations(),
     scoreRange: loadScoreRange(),
@@ -12,6 +12,8 @@
     mapScale: null,
     autoBot: false,
   });
+
+  if (!state.scoreRange) state.scoreRange = loadScoreRange();
 
   if (window.__pnjInt && window.__pnjIntVersion === SCRIPT_VERSION) return;
 
@@ -1431,7 +1433,7 @@
       updateAutoBotButton();
     });
 
-    const savedRange = state.scoreRange || { min: 4500, max: 5000 };
+    const savedRange = state.scoreRange || loadScoreRange();
     minInput.value = savedRange.min;
     maxInput.value = savedRange.max;
     valMinInput.value = savedRange.min;
@@ -1449,7 +1451,8 @@
   window.__pnjShowPanel = () => ensurePwaPanel(true);
   window.__pnjHidePanel = () => document.getElementById("pnj-pwa-panel")?.remove();
 
-  window.addEventListener("keydown", (event) => {
+  if (window.__pnjKeyHandler) window.removeEventListener("keydown", window.__pnjKeyHandler);
+  window.__pnjKeyHandler = (event) => {
     const target = event.target;
     if (target && /input|textarea|select/i.test(target.tagName)) return;
 
@@ -1475,7 +1478,8 @@
         setTimeout(() => toast.remove(), 1500);
       });
     }
-  });
+  };
+  window.addEventListener("keydown", window.__pnjKeyHandler);
   ensurePwaPanel();
   window.addEventListener("DOMContentLoaded", ensurePwaPanel, { once: true });
   window.addEventListener("DOMContentLoaded", clearBadge, { once: true });
