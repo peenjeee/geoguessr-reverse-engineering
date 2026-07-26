@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_VERSION = "clean-v22";
+  const SCRIPT_VERSION = "clean-v24";
   const state = (window.__pnjState = window.__pnjState || {
     locations: loadLocations(),
     scoreRange: loadScoreRange(),
@@ -21,6 +21,9 @@
   window.__pnjIntVersion = SCRIPT_VERSION;
 
   const STORE_KEY = "pnj_rnd_loc";
+  // Longer than any single Street View hop, shorter than the gap between rounds even on
+  // city-sized maps, so it separates "the player walked" from "a new round started".
+  const WALK_STEP_KM = 1;
   const USER_ID_KEY = "pnj_user_id";
   const DASHBOARD_URL = "https://gr.0xpnj.dev/";
   const MAP_TARGET_SELECTOR = [
@@ -239,7 +242,7 @@
     if (!candidates.length) return;
 
     const now = Date.now();
-    if ((state.currentQuality || 0) > 1 && now - (state.currentAt || 0) < 45000) {
+    if ((state.currentQuality || 0) > 1) {
       return;
     }
 
@@ -282,20 +285,28 @@
     if (!isCoord(coord) || isJunkCoord(coord.lat, coord.lng)) return;
 
     const now = Date.now();
-    if (quality < (state.currentQuality || 0) && now - (state.currentAt || 0) < 45000) {
+    // The round's location never changes, so once a panorama or anchored fix is in,
+    // weaker sources stay locked out for the whole round. Map pans and zooms fire
+    // MapsJsInternalService RPCs carrying viewport coordinates; without this lock they
+    // would drag the pin to whatever the player is looking at.
+    if (quality < (state.currentQuality || 0)) {
       return;
     }
 
-    if (state.lastGoogleCoord) {
-      const dist = distanceKm(state.lastGoogleCoord.lat, state.lastGoogleCoord.lng, coord.lat, coord.lng);
-      state.lastGoogleCoord = coord;
-      if (dist < 0.2) {
-        state.currentQuality = Math.max(state.currentQuality || 0, quality);
+    // Track where the panorama actually is, separately from what the pin shows.
+    const previous = state.lastGoogleCoord;
+    state.lastGoogleCoord = { lat: coord.lat, lng: coord.lng };
+
+    // Walking arrives as a chain of short hops; a new round teleports far away. Measuring
+    // each hop against the PREVIOUS position — not against the round's first fix — keeps
+    // the pin on the answer however far the player walks, while still accepting the next
+    // round instantly, even on maps whose rounds sit close together.
+    if (previous && quality === (state.currentQuality || 0)) {
+      const step = distanceKm(previous.lat, previous.lng, coord.lat, coord.lng);
+      if (step < WALK_STEP_KM) {
         state.currentAt = now;
         return;
       }
-    } else {
-      state.lastGoogleCoord = coord;
     }
 
     const existing = state.locations.find(
@@ -312,6 +323,14 @@
     clearBadge();
     window.dispatchEvent(new CustomEvent("pnj_loc_upd", { detail: state.current }));
     broadcastToWeb(state.current);
+  }
+
+  // Released when a round ends so the next round can be captured even if its
+  // panorama hook misses; without this a stuck high-quality fix would block every
+  // weaker source forever.
+  function resetRoundLock() {
+    state.currentQuality = 0;
+    state.lastGoogleCoord = null;
   }
 
   function inspectGoogleMapsText(text) {
@@ -1078,13 +1097,36 @@
 
   let botGuessing = false;
   let lastAutoGuess = null;
+  let roundOverSeen = false;
+  let lastPath = location.pathname;
   if (window.__pnjBotTimer) clearInterval(window.__pnjBotTimer);
   window.__pnjBotTimer = setInterval(async () => {
+    const roundOver = document.querySelector('[data-qa="close-round-result"]') ||
+      document.querySelector('[data-qa="play-next-round"]');
+
+    // Release the lock when the result screen CLOSES, never while it is up: GeoGuessr
+    // animates a map on that screen, and an open gate there would let its viewport
+    // coordinates overwrite the round location we just protected.
+    if (roundOver) {
+      roundOverSeen = true;
+    } else if (roundOverSeen) {
+      roundOverSeen = false;
+      resetRoundLock();
+    }
+
+    // Game summaries, lobbies and duels end without those buttons, so also release on
+    // SPA navigation — otherwise the anchor could freeze the pin for the whole session.
+    if (location.pathname !== lastPath) {
+      lastPath = location.pathname;
+      roundOverSeen = false;
+      resetRoundLock();
+      // Drop the cached map scale so a different map re-measures its own bounds.
+      state.mapScale = null;
+    }
+
     if (!state.autoBot) return;
 
-    const nextBtn = document.querySelector('[data-qa="close-round-result"]') ||
-      document.querySelector('[data-qa="play-next-round"]') ||
-      findBtnPartial(['NEXT', 'AGAIN', 'SUMMARY']);
+    const nextBtn = roundOver || findBtnPartial(['NEXT', 'AGAIN', 'SUMMARY']);
 
     if (nextBtn) {
       nextBtn.click();
@@ -1100,7 +1142,7 @@
     if (!mapCanvas) return;
 
     botGuessing = true;
-
+    try {
       const pwaPanel = document.getElementById("pnj-pwa-panel");
       const minInput = pwaPanel?.querySelector("[data-pnj-min]");
       const maxInput = pwaPanel?.querySelector("[data-pnj-max]");
@@ -1111,19 +1153,21 @@
         range = { min: Math.min(min, max), max: Math.max(min, max) };
       }
 
-    await window.__pnjCmdPlace(coord, "nearby", { scoreRange: range });
-    await new Promise(r => setTimeout(r, 800));
+      await window.__pnjCmdPlace(coord, "nearby", { scoreRange: range });
+      await new Promise(r => setTimeout(r, 800));
 
-    const freshGuessBtn = document.querySelector('[data-qa="perform-guess"]') ||
-      document.querySelector('.guess-map__guess-button') ||
-      findBtnExact('GUESS');
+      const freshGuessBtn = document.querySelector('[data-qa="perform-guess"]') ||
+        document.querySelector('.guess-map__guess-button') ||
+        findBtnExact('GUESS');
 
-    if (freshGuessBtn && !freshGuessBtn.disabled) {
-      freshGuessBtn.click();
-      lastAutoGuess = coord;
+      if (freshGuessBtn && !freshGuessBtn.disabled) {
+        freshGuessBtn.click();
+        lastAutoGuess = coord;
+      }
+    } finally {
+      // Without this the latch sticks on any throw and the bot dies for the session.
+      botGuessing = false;
     }
-
-    botGuessing = false;
   }, 2000);
 
   function isPwaWindow() {
@@ -1427,11 +1471,17 @@
         window.__pnjCmdPlace(currentCoord(), button.dataset.pnjPlace, { scoreRange: scoreRange() }).then(refreshMap);
       }
     });
-    window.addEventListener("pnj_loc_upd", refreshMap);
-    window.addEventListener("pnj_autobot_upd", (e) => {
+    // The panel is rebuilt on every show/hide, so detach the previous instance's
+    // handlers first — otherwise they pile up on window for the whole session.
+    if (window.__pnjPanelLocHandler) window.removeEventListener("pnj_loc_upd", window.__pnjPanelLocHandler);
+    if (window.__pnjPanelBotHandler) window.removeEventListener("pnj_autobot_upd", window.__pnjPanelBotHandler);
+    window.__pnjPanelLocHandler = refreshMap;
+    window.__pnjPanelBotHandler = (e) => {
       state.autoBot = e.detail;
       updateAutoBotButton();
-    });
+    };
+    window.addEventListener("pnj_loc_upd", window.__pnjPanelLocHandler);
+    window.addEventListener("pnj_autobot_upd", window.__pnjPanelBotHandler);
 
     const savedRange = state.scoreRange || loadScoreRange();
     minInput.value = savedRange.min;

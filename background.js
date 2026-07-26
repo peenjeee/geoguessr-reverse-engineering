@@ -51,7 +51,9 @@ chrome.action.onClicked.addListener(async (tab) => {
     return;
   }
   try {
-    await chrome.sidePanel.setOptions({ tabId: tab.id, path: "popup.html", enabled: true });
+    // Bind the panel to this tab: without targetTabId it falls back to "whatever tab is
+    // active", so location updates are dropped whenever the user looks at another tab.
+    await chrome.sidePanel.setOptions({ tabId: tab.id, path: `popup.html?targetTabId=${tab.id}`, enabled: true });
     await chrome.sidePanel.open({ tabId: tab.id });
     sidePanelTabs.add(tab.id);
     await hidePagePanel(tab);
@@ -82,7 +84,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       sidePanelTabs.delete(tabId);
       return;
     }
-    chrome.sidePanel.setOptions({ tabId, path: "popup.html", enabled: true });
+    chrome.sidePanel.setOptions({ tabId, path: `popup.html?targetTabId=${tabId}`, enabled: true });
     chrome.sidePanel.open({ tabId })
       .then(() => { sidePanelTabs.add(tabId); })
       .catch(() => showPagePanel(sender.tab, `popup.html?targetTabId=${tabId}`));
