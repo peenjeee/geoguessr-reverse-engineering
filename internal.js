@@ -1,7 +1,8 @@
 (function () {
-  const SCRIPT_VERSION = "clean-v20";
+  const SCRIPT_VERSION = "clean-v21";
   const state = (window.__pnjState = window.__pnjState || {
     locations: loadLocations(),
+    scoreRange: loadScoreRange(),
     maps: [],
     source: "stored",
     current: null,
@@ -93,6 +94,27 @@
 
   function saveLocations() {
     localStorage.setItem(STORE_KEY, JSON.stringify(state.locations.slice(-20)));
+  }
+
+  function loadScoreRange() {
+    try {
+      const stored = JSON.parse(localStorage.getItem("pnj_score_range") || "null");
+      const min = Math.max(0, Math.min(5000, Number(stored?.min)));
+      const max = Math.max(0, Math.min(5000, Number(stored?.max)));
+      if (Number.isFinite(min) && Number.isFinite(max)) {
+        return { min: Math.min(min, max), max: Math.max(min, max) };
+      }
+    } catch {
+    }
+    return { min: 4500, max: 5000 };
+  }
+
+  function saveScoreRange(range) {
+    state.scoreRange = range;
+    try {
+      localStorage.setItem("pnj_score_range", JSON.stringify(range));
+    } catch {
+    }
   }
 
   function asNumber(value) {
@@ -1054,7 +1076,8 @@
 
   let botGuessing = false;
   let lastAutoGuess = null;
-  setInterval(async () => {
+  if (window.__pnjBotTimer) clearInterval(window.__pnjBotTimer);
+  window.__pnjBotTimer = setInterval(async () => {
     if (!state.autoBot) return;
 
     const nextBtn = document.querySelector('[data-qa="close-round-result"]') ||
@@ -1077,10 +1100,9 @@
     botGuessing = true;
 
       const pwaPanel = document.getElementById("pnj-pwa-panel");
-      const host = pwaPanel?.shadowRoot;
-      const minInput = host?.querySelector("[data-pnj-min]");
-      const maxInput = host?.querySelector("[data-pnj-max]");
-      let range = { min: 4500, max: 5000 };
+      const minInput = pwaPanel?.querySelector("[data-pnj-min]");
+      const maxInput = pwaPanel?.querySelector("[data-pnj-max]");
+      let range = state.scoreRange || { min: 4500, max: 5000 };
       if (minInput && maxInput) {
         const min = Math.max(0, Math.min(5000, Number(minInput.value || 4500)));
         const max = Math.max(0, Math.min(5000, Number(maxInput.value || 5000)));
@@ -1325,6 +1347,7 @@
         if (e.target === valMaxInput && valMaxInput.value !== "") maxInput.value = valMaxInput.value;
       }
       const range = scoreRange();
+      saveScoreRange(range);
       rangeSlider.style.setProperty("--range-left", `${range.min / 50}%`);
       rangeSlider.style.setProperty("--range-right", `${range.max / 50}%`);
       if (!isFromNumberBox) {
@@ -1407,6 +1430,12 @@
       state.autoBot = e.detail;
       updateAutoBotButton();
     });
+
+    const savedRange = state.scoreRange || { min: 4500, max: 5000 };
+    minInput.value = savedRange.min;
+    maxInput.value = savedRange.max;
+    valMinInput.value = savedRange.min;
+    valMaxInput.value = savedRange.max;
 
     updateRange();
     updateAutoBotButton();

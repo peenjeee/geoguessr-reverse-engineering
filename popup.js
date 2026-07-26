@@ -118,6 +118,56 @@ function mapUrl(lat, lng) {
   return `https://maps.google.com/maps?q=${lat},${lng}&z=6&output=embed`;
 }
 
+async function pushScoreRange() {
+  const tab = await activeTab();
+  if (!tab?.id || !allowedPage.test(tab.url || "")) return;
+
+  const range = nearbyScoreRange();
+  await chrome.scripting.executeScript({
+    target: { tabId: tab.id, allFrames: true },
+    world: "MAIN",
+    args: [range],
+    func: (range) => {
+      if (window.__pnjState) window.__pnjState.scoreRange = range;
+      try {
+        localStorage.setItem("pnj_score_range", JSON.stringify(range));
+      } catch { }
+    },
+  });
+}
+
+async function pullScoreRange() {
+  const tab = await activeTab();
+  if (!tab?.id || !allowedPage.test(tab.url || "")) return;
+
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    world: "MAIN",
+    func: () => {
+      try {
+        return JSON.parse(localStorage.getItem("pnj_score_range") || "null");
+      } catch {
+        return null;
+      }
+    },
+  });
+
+  const stored = results?.[0]?.result;
+  if (!stored) return;
+
+  const min = Math.max(0, Math.min(5000, Number(stored.min)));
+  const max = Math.max(0, Math.min(5000, Number(stored.max)));
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return;
+
+  const low = Math.min(min, max);
+  const high = Math.max(min, max);
+  if (nearbyValMin) nearbyValMin.value = low;
+  if (nearbyValMax) nearbyValMax.value = high;
+  if (nearbyMin) nearbyMin.value = low;
+  if (nearbyMax) nearbyMax.value = high;
+  updateNearbyValue();
+}
+
 function setMapCoord(coord) {
   if (typeof coord?.lat !== "number" || typeof coord?.lng !== "number") return;
 
@@ -194,6 +244,10 @@ async function openMapInPopup() {
 }
 
 async function toggleAutoBot() {
+  try {
+    await pushScoreRange();
+  } catch { }
+
   const { tab, pickedStatus } = await currentRound();
   if (!tab?.id) return;
 
@@ -320,6 +374,7 @@ document.addEventListener("click", (event) => {
       nearbyMin.value = min;
       nearbyMax.value = max;
       updateNearbyValue();
+      pushScoreRange().catch(() => { });
     });
   }
 });
@@ -339,6 +394,7 @@ if (nearbySlider && nearbyMin && nearbyMax) {
 
   nearbySlider.addEventListener("pointerup", () => {
     draggedRangeHandle = null;
+    pushScoreRange().catch(() => { });
   });
 
   nearbySlider.addEventListener("pointercancel", () => {
@@ -373,3 +429,4 @@ updateNearbyValue();
 if (copyrightYear) copyrightYear.textContent = new Date().getFullYear();
 hidePagePanel().catch(() => { });
 openMapInPopup().catch(() => { });
+pullScoreRange().catch(() => { });
