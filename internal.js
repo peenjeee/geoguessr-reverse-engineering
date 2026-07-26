@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_VERSION = "clean-v24";
+  const SCRIPT_VERSION = "clean-v25";
   const state = (window.__pnjState = window.__pnjState || {
     locations: loadLocations(),
     scoreRange: loadScoreRange(),
@@ -383,6 +383,17 @@
     return null;
   }
 
+  // The fetch/XHR proxies are installed once per tab and survive re-injection, so if they
+  // closed over these functions directly they would keep running the version that first
+  // patched them — an upgraded script would re-run yet never actually take effect. Routing
+  // through window lets the newest injection own the behaviour.
+  window.__pnjHandlers = {
+    googleText: (text) => inspectGoogleMapsText(text),
+    jsonText: (text, url) => inspectText(text, url),
+    jsonObject: (object, url) => rememberLocations(collectCoords(object, url)),
+    panorama: (coord) => rememberLocation(coord, 3),
+  };
+
   function inspectText(text, url) {
     if (!text || !/[{[]/.test(text[0])) return;
 
@@ -427,12 +438,12 @@
           const type = copy.headers && copy.headers.get("content-type");
 
           if (url && url.includes("maps.googleapis.com") && (url.includes("GetMetadata") || url.includes("SingleImageSearch"))) {
-            copy.text().then((text) => inspectGoogleMapsText(text)).catch(() => { });
+            copy.text().then((text) => window.__pnjHandlers.googleText(text)).catch(() => { });
             return;
           }
 
           if (!type || type.includes("json")) {
-            copy.text().then((text) => inspectText(text.trim(), url)).catch(() => { });
+            copy.text().then((text) => window.__pnjHandlers.jsonText(text.trim(), url)).catch(() => { });
           }
         }).catch(() => { });
         return request;
@@ -476,7 +487,7 @@
               }
             }
             try {
-              inspectGoogleMapsText(body);
+              window.__pnjHandlers.googleText(body);
             } catch {
             }
             return;
@@ -486,12 +497,12 @@
           if (type && !type.includes("json")) return;
 
           if (xhr.response && typeof xhr.response === "object") {
-            rememberLocations(collectCoords(xhr.response, url));
+            window.__pnjHandlers.jsonObject(xhr.response, url);
             return;
           }
 
           try {
-            inspectText(String(xhr.responseText || "").trim(), url);
+            window.__pnjHandlers.jsonText(String(xhr.responseText || "").trim(), url);
           } catch {
           }
         });
@@ -531,7 +542,7 @@
         pano.addListener("position_changed", () => {
           const pos = typeof pano.getPosition === "function" ? pano.getPosition() : null;
           if (pos && typeof pos.lat === "function") {
-            rememberLocation({ lat: pos.lat(), lng: pos.lng() }, 3);
+            window.__pnjHandlers.panorama({ lat: pos.lat(), lng: pos.lng() });
           }
         });
       }
