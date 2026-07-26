@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_VERSION = "clean-v25";
+  const SCRIPT_VERSION = "clean-v26";
   const state = (window.__pnjState = window.__pnjState || {
     locations: loadLocations(),
     scoreRange: loadScoreRange(),
@@ -25,6 +25,7 @@
   // city-sized maps, so it separates "the player walked" from "a new round started".
   const WALK_STEP_KM = 1;
   const USER_ID_KEY = "pnj_user_id";
+  const USER_TOKEN_KEY = "pnj_user_token";
   const DASHBOARD_URL = "https://gr.0xpnj.dev/";
   const MAP_TARGET_SELECTOR = [
     "canvas",
@@ -55,7 +56,22 @@
     return id;
   }
 
+  // Proves to the dashboard that a POST really comes from the owner of this user id.
+  // The id is public (it travels in the dashboard URL); this secret never leaves the
+  // browser except in the telemetry POST body, so knowing an id is not enough to
+  // inject fake rounds into someone else's dashboard.
+  function getUserToken() {
+    let token = localStorage.getItem(USER_TOKEN_KEY);
+    if (token) return token;
+    token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    localStorage.setItem(USER_TOKEN_KEY, token);
+    return token;
+  }
+
   const userId = getUserId();
+  const userToken = getUserToken();
 
   function copyUserId() {
     if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(userId);
@@ -216,7 +232,11 @@
       lat: coord.lat,
       lng: coord.lng,
       targetScore: targetScore,
-      distanceKm: distanceKm
+      distanceKm: distanceKm,
+      // background.js relays this same payload as a fallback POST, so the token has to
+      // travel with it. This costs nothing: the token lives in localStorage on this very
+      // origin, so page scripts can already read it — it only guards against OTHER users.
+      token: userToken
     };
     const payload = JSON.stringify(payloadObject);
 
@@ -913,6 +933,10 @@
       lat: Math.max(-90, Math.min(90, (endLat * 180) / Math.PI)),
       lng: (((((endLng * 180) / Math.PI) + 180) % 360) + 360) % 360 - 180,
       round: coord.round || null,
+      // Carried out so the caller can report what it actually aimed for instead of
+      // falling back to broadcastToWeb's 5000/0 defaults.
+      targetScore,
+      distanceKm,
     };
   }
 
@@ -1075,12 +1099,21 @@
     if (mode === "maps") return { ok: openMaps(target), status: window.__pnjCmdStatus() };
 
     const guess = mode === "nearby" ? nearbyCoord(target, options.scoreRange) : target;
-    if (placeOnMap(guess, true)) return { ok: true, status: window.__pnjCmdStatus() };
+    // "exact" aims at the answer itself: full score, zero offset.
+    const aimedScore = mode === "nearby" ? Math.round(guess.targetScore) : 5000;
+    const aimedDistance = mode === "nearby" ? guess.distanceKm : 0;
+
+    const report = (ok) => {
+      if (ok) broadcastToWeb(target, aimedScore, aimedDistance);
+      return ok;
+    };
+
+    if (report(placeOnMap(guess, true))) return { ok: true, status: window.__pnjCmdStatus() };
 
     openGuessMap();
     await delay(300);
 
-    return { ok: placeOnMap(guess), status: window.__pnjCmdStatus() };
+    return { ok: report(placeOnMap(guess)), status: window.__pnjCmdStatus() };
   };
 
   function findBtnExact(textTarget) {
