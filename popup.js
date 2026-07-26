@@ -297,16 +297,29 @@ document.addEventListener("click", (event) => {
       if (Number(e.target.value) > 5000) e.target.value = 5000;
       if (Number(e.target.value) < 0 && e.target.value !== "") e.target.value = 0;
     }
-    if (e.target === nearbyValMin && nearbyMin) nearbyMin.value = nearbyValMin.value;
-    if (e.target === nearbyValMax && nearbyMax) nearbyMax.value = nearbyValMax.value;
+    if (e.target === nearbyValMin && nearbyMin && nearbyValMin.value !== "") nearbyMin.value = nearbyValMin.value;
+    if (e.target === nearbyValMax && nearbyMax && nearbyValMax.value !== "") nearbyMax.value = nearbyValMax.value;
     updateNearbyValue(e);
   });
-  
+
   if (input === nearbyValMin || input === nearbyValMax) {
     input.addEventListener("change", () => {
-      const range = nearbyScoreRange();
-      if (nearbyValMin) nearbyValMin.value = range.min;
-      if (nearbyValMax) nearbyValMax.value = range.max;
+      const readBox = (box, slider) => {
+        const raw = String(box.value || "").trim();
+        const num = raw === "" ? Number(slider.value) : Number(raw);
+        return Math.max(0, Math.min(5000, Number.isFinite(num) ? num : Number(slider.value)));
+      };
+
+      let min = readBox(nearbyValMin, nearbyMin);
+      let max = readBox(nearbyValMax, nearbyMax);
+      if (input === nearbyValMin && min > max) max = min;
+      else if (input === nearbyValMax && max < min) min = max;
+
+      nearbyValMin.value = min;
+      nearbyValMax.value = max;
+      nearbyMin.value = min;
+      nearbyMax.value = max;
+      updateNearbyValue();
     });
   }
 });

@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_VERSION = "clean-v19";
+  const SCRIPT_VERSION = "clean-v20";
   const state = (window.__pnjState = window.__pnjState || {
     locations: loadLocations(),
     maps: [],
@@ -1321,8 +1321,8 @@
       if (isFromNumberBox) {
         if (Number(e.target.value) > 5000) e.target.value = 5000;
         if (Number(e.target.value) < 0 && e.target.value !== "") e.target.value = 0;
-        minInput.value = valMinInput.value;
-        maxInput.value = valMaxInput.value;
+        if (e.target === valMinInput && valMinInput.value !== "") minInput.value = valMinInput.value;
+        if (e.target === valMaxInput && valMaxInput.value !== "") maxInput.value = valMaxInput.value;
       }
       const range = scoreRange();
       rangeSlider.style.setProperty("--range-left", `${range.min / 50}%`);
@@ -1354,11 +1354,24 @@
     host.querySelector("[data-pnj-year]").textContent = new Date().getFullYear();
     host.addEventListener("input", updateRange);
     host.addEventListener("change", (e) => {
-      if (e.target === valMinInput || e.target === valMaxInput) {
-        const range = scoreRange();
-        valMinInput.value = range.min;
-        valMaxInput.value = range.max;
-      }
+      if (e.target !== valMinInput && e.target !== valMaxInput) return;
+
+      const readBox = (box, slider) => {
+        const raw = String(box.value || "").trim();
+        const num = raw === "" ? Number(slider.value) : Number(raw);
+        return Math.max(0, Math.min(5000, Number.isFinite(num) ? num : Number(slider.value)));
+      };
+
+      let min = readBox(valMinInput, minInput);
+      let max = readBox(valMaxInput, maxInput);
+      if (e.target === valMinInput && min > max) max = min;
+      else if (e.target === valMaxInput && max < min) min = max;
+
+      valMinInput.value = min;
+      valMaxInput.value = max;
+      minInput.value = min;
+      maxInput.value = max;
+      updateRange();
     });
     host.addEventListener("click", (event) => {
       const button = event.target.closest("button");
