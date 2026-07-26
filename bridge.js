@@ -11,7 +11,6 @@
         chrome.runtime.sendMessage({ type: "pnj-location", coord }).catch(() => {});
       }
     } catch (err) {
-      // Extension context invalidated, usually fixed by refreshing the page
     }
   });
 
@@ -24,7 +23,6 @@
         chrome.runtime.sendMessage({ type: "pnj-telemetry", payload }).catch(() => {});
       }
     } catch (err) {
-      // Extension context invalidated, usually fixed by refreshing the page
     }
   });
 
@@ -36,7 +34,6 @@
           chrome.runtime.sendMessage({ type: "pnj-open-panel" }).catch(() => {});
         }
       } catch (err) {
-        // Extension context invalidated, usually fixed by refreshing the page
       }
       return;
     }
@@ -50,7 +47,6 @@
         chrome.runtime.sendMessage({ type: "pnj-telemetry", payload }).catch(() => {});
       }
     } catch (err) {
-      // Extension context invalidated, usually fixed by refreshing the page
     }
   });
 })();

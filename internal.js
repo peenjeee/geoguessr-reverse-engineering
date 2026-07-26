@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_VERSION = "clean-v12";
+  const SCRIPT_VERSION = "clean-v15";
   const state = (window.__pnjState = window.__pnjState || {
     locations: loadLocations(),
     maps: [],
@@ -240,7 +240,7 @@
     if (state.lastGoogleCoord) {
       const dist = distanceKm(state.lastGoogleCoord.lat, state.lastGoogleCoord.lng, coord.lat, coord.lng);
       state.lastGoogleCoord = coord;
-      if (dist < 0.2) { // Less than 200m is considered a step in the same panorama
+      if (dist < 0.2) {
         return;
       }
     } else {
@@ -263,9 +263,9 @@
 
   function inspectGoogleMapsText(text) {
     const str = String(text || "");
-    const matches = str.matchAll(/-?\d+\.\d+,\s*-?\d+\.\d+/g);
-
-    for (const match of matches) {
+    const pattern = /-?\d+\.\d+,-?\d+\.\d+/g;
+    let match;
+    while ((match = pattern.exec(str)) !== null) {
       const [lat, lng] = match[0].split(",").map(Number);
       if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat !== 0 || lng !== 0)) {
         rememberLocation({ lat, lng });
@@ -325,7 +325,6 @@
       
       rememberLocations(candidates);
     } catch {
-      // Not JSON.
     }
   }
 
@@ -365,24 +364,23 @@
     window.XMLHttpRequest = new Proxy(window.XMLHttpRequest, {
       construct: function (target, args) {
         const xhr = new target(...args);
+        let method = "";
         let url = "";
 
         xhr.open = new Proxy(xhr.open, {
           apply: function (openTarget, openThisArg, openArgs) {
+            method = String(openArgs[0] || "").toUpperCase();
             url = String(openArgs[1] || "");
             return Reflect.apply(openTarget, openThisArg, openArgs);
           }
         });
 
         xhr.addEventListener("load", () => {
-          if (
-            url.includes("maps.googleapis.com") &&
-            (url.includes("GetMetadata") || url.includes("SingleImageSearch"))
-          ) {
+          if (method === 'POST' &&
+              url.startsWith('https://maps.googleapis.com/$rpc/google.internal.maps.mapsjs.v1.MapsJsInternalService/')) {
             try {
               inspectGoogleMapsText(xhr.responseText || xhr.response);
             } catch {
-              // Some responseType values block responseText.
             }
             return;
           }
@@ -398,7 +396,6 @@
           try {
             inspectText(String(xhr.responseText || "").trim(), url);
           } catch {
-            // Some responseType values block responseText.
           }
         });
 
@@ -411,7 +408,6 @@
   function captureMap(map) {
     if (map && !state.maps.includes(map)) {
       state.maps.push(map);
-      // Prevent memory leak by keeping only recent valid maps
       state.maps = state.maps.filter(m => {
         try { return m && (m.getContainer ? document.body.contains(m.getContainer()) : true); }
         catch { return false; }
@@ -471,7 +467,6 @@
         },
       });
     } catch {
-      // Already locked by the page.
     }
 
     patchMapLibrary(current);
@@ -885,7 +880,6 @@
         window.dispatchEvent(new CustomEvent("pnj_loc_plc", { detail: coord }));
         return true;
       } catch {
-        // Try the next visible map.
       }
     }
 
@@ -941,7 +935,6 @@
     return { ok: placeOnMap(guess), status: window.__pnjCmdStatus() };
   };
 
-  // --- AUTO BOT LOGIC ---
   function findBtnExact(textTarget) {
     const allEls = document.querySelectorAll('button, div, span, a');
     for (let el of allEls) {
@@ -984,7 +977,6 @@
     const coord = currentCoord();
     if (!coord || coord === lastAutoGuess) return;
 
-    // Ensure we are in a game view (guessing map canvas exists)
     const mapCanvas = document.querySelector(MAP_TARGET_SELECTOR);
     if (!mapCanvas) return;
 
@@ -1015,7 +1007,6 @@
 
     botGuessing = false;
   }, 2000);
-  // ----------------------
 
   function isPwaWindow() {
     return (
@@ -1321,15 +1312,33 @@
   window.__pnjBroadcastToWeb = broadcastToWeb;
   window.__pnjShowPanel = () => ensurePwaPanel(true);
   window.__pnjHidePanel = () => document.getElementById("pnj-pwa-panel")?.remove();
+
   window.addEventListener("keydown", (event) => {
     const target = event.target;
     if (target && /input|textarea|select/i.test(target.tagName)) return;
+
     if (event.key === "Delete" && !event.repeat) {
       togglePwaPanelVisibility();
       return;
     }
-    if (event.key !== "Insert" || event.repeat) return;
-    window.postMessage({ type: "pnj-open-panel" }, "*");
+
+    if (event.key === "Insert" && !event.repeat) {
+      window.postMessage({ type: "pnj-open-panel" }, "*");
+      return;
+    }
+
+    if (event.key === "C" && event.ctrlKey && event.shiftKey && !event.repeat) {
+      event.preventDefault();
+      const coord = currentCoord();
+      if (isCoord(coord)) broadcastToWeb(coord);
+      copyUserId().then(() => {
+        const toast = document.createElement("div");
+        toast.textContent = "✓ ID Copied!";
+        toast.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#22c55e;color:#fff;padding:10px 20px;border-radius:8px;font:bold 14px sans-serif;z-index:2147483647;box-shadow:0 4px 12px rgba(0,0,0,0.3);";
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 1500);
+      });
+    }
   });
   ensurePwaPanel();
   window.addEventListener("DOMContentLoaded", ensurePwaPanel, { once: true });

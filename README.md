@@ -11,7 +11,7 @@ cd geoguessr-reverse-engineering
 
 ## Features
 
-- **Copy ID**: Copy the browser `pnj_user_id` used by the PNJ web resolver.
+- **Copy ID**: Copy the browser `pnj_user_id` used by the PNJ web resolver. Use `Ctrl+Shift+C` for instant copy without opening the panel.
 - **Live round telemetry**: Send the active round location to `http://localhost:3000/api/telemetry` and `https://gr.0xpnj.dev/api/telemetry`.
 - **Built-in Auto Bot**: Farm EXP seamlessly in the background with auto-guess and auto-next round.
 - **Place exact**: Drop the pin on the captured round location.
@@ -57,6 +57,7 @@ Press `Delete` to show or hide the PWA panel.
 
 - `Insert`: Open or close the browser side panel in normal tabs.
 - `Delete`: Show or hide the in-page panel in installed PWA mode.
+- `Ctrl+Shift+C`: Copy your user ID instantly without opening any panel (shows toast notification).
 
 ### Fallback behavior
 
