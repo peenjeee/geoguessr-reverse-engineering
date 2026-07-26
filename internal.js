@@ -1,10 +1,12 @@
 (function () {
-  const SCRIPT_VERSION = "clean-v15";
+  const SCRIPT_VERSION = "clean-v19";
   const state = (window.__pnjState = window.__pnjState || {
     locations: loadLocations(),
     maps: [],
     source: "stored",
     current: null,
+    currentQuality: 0,
+    currentAt: 0,
     lastGoogleCoord: null,
     mapScale: null,
     autoBot: false,
@@ -72,9 +74,18 @@
     return cleanFetch(url, options);
   }
 
+  function isJunkCoord(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return true;
+    if (Math.abs(lat) > 85) return true;
+    if (Math.abs(lat) < 0.5 && Math.abs(lng) < 0.5) return true;
+    return false;
+  }
+
   function loadLocations() {
     try {
-      return JSON.parse(localStorage.getItem(STORE_KEY) || "[]").filter(isCoord);
+      return JSON.parse(localStorage.getItem(STORE_KEY) || "[]")
+        .filter(isCoord)
+        .filter((item) => !isJunkCoord(item.lat, item.lng));
     } catch {
       return [];
     }
@@ -114,7 +125,8 @@
 
     const lat = pickNumber(object, ["lat", "latitude"]);
     const lng = pickNumber(object, ["lng", "lon", "long", "longitude"]);
-    return isCoord({ lat, lng }) ? { lat, lng } : null;
+    if (!isCoord({ lat, lng }) || isJunkCoord(lat, lng)) return null;
+    return { lat, lng };
   }
 
   function pathScore(path, url) {
@@ -200,6 +212,13 @@
   }
 
   function rememberLocations(candidates) {
+    if (!candidates.length) return;
+
+    const now = Date.now();
+    if ((state.currentQuality || 0) > 1 && now - (state.currentAt || 0) < 45000) {
+      return;
+    }
+
     candidates
       .sort((left, right) => left.score - right.score)
       .forEach((coord) => {
@@ -218,7 +237,8 @@
     saveLocations();
 
     if (state.current) {
-      const round = state.current.round ? `R${state.current.round} ` : "";
+      state.currentQuality = 1;
+      state.currentAt = now;
       clearBadge();
       window.dispatchEvent(new CustomEvent("pnj_loc_upd", { detail: state.current }));
       broadcastToWeb(state.current);
@@ -234,13 +254,20 @@
     return 2 * r * Math.asin(Math.sqrt(a));
   }
 
-  function rememberLocation(coord, round = null) {
-    if (!isCoord(coord)) return;
+  function rememberLocation(coord, quality = 1) {
+    if (!isCoord(coord) || isJunkCoord(coord.lat, coord.lng)) return;
+
+    const now = Date.now();
+    if (quality < (state.currentQuality || 0) && now - (state.currentAt || 0) < 45000) {
+      return;
+    }
 
     if (state.lastGoogleCoord) {
       const dist = distanceKm(state.lastGoogleCoord.lat, state.lastGoogleCoord.lng, coord.lat, coord.lng);
       state.lastGoogleCoord = coord;
       if (dist < 0.2) {
+        state.currentQuality = Math.max(state.currentQuality || 0, quality);
+        state.currentAt = now;
         return;
       }
     } else {
@@ -251,9 +278,11 @@
       (item) => Math.abs(item.lat - coord.lat) < 0.000001 && Math.abs(item.lng - coord.lng) < 0.000001,
     );
 
-    if (!existing) state.locations.push({ lat: coord.lat, lng: coord.lng, round, source: "google" });
+    if (!existing) state.locations.push({ lat: coord.lat, lng: coord.lng, round: null, source: "google" });
     state.current = existing || state.locations[state.locations.length - 1];
     state.source = "google";
+    state.currentQuality = quality;
+    state.currentAt = now;
     state.locations = state.locations.slice(-20);
     saveLocations();
     clearBadge();
@@ -263,12 +292,23 @@
 
   function inspectGoogleMapsText(text) {
     const str = String(text || "");
-    const pattern = /-?\d+\.\d+,-?\d+\.\d+/g;
     let match;
+
+    const anchored = /null,null,(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/g;
+    while ((match = anchored.exec(str)) !== null) {
+      const lat = Number(match[1]);
+      const lng = Number(match[2]);
+      if (Math.abs(lng) <= 180 && !isJunkCoord(lat, lng)) {
+        rememberLocation({ lat, lng }, 2);
+        return;
+      }
+    }
+
+    const pattern = /-?\d{1,2}\.\d{3,},-?\d{1,3}\.\d{3,}/g;
     while ((match = pattern.exec(str)) !== null) {
       const [lat, lng] = match[0].split(",").map(Number);
-      if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat !== 0 || lng !== 0)) {
-        rememberLocation({ lat, lng });
+      if (Math.abs(lng) <= 180 && !isJunkCoord(lat, lng)) {
+        rememberLocation({ lat, lng }, 1);
         return;
       }
     }
@@ -328,7 +368,7 @@
     }
   }
 
-  const patchedGlobals = new WeakSet();
+  const patchedGlobals = (window.__pnjPatched = window.__pnjPatched || new WeakSet());
 
   function patchFetch() {
     if (typeof window.fetch !== "function" || patchedGlobals.has(window.fetch)) return;
@@ -376,10 +416,24 @@
         });
 
         xhr.addEventListener("load", () => {
-          if (method === 'POST' &&
-              url.startsWith('https://maps.googleapis.com/$rpc/google.internal.maps.mapsjs.v1.MapsJsInternalService/')) {
+          const isMapsRpc = method === "POST" &&
+              url.startsWith("https://maps.googleapis.com/$rpc/google.internal.maps.mapsjs.v1.MapsJsInternalService/");
+          const isPanoLookup = url.includes("maps.googleapis.com") &&
+              (url.includes("GetMetadata") || url.includes("SingleImageSearch"));
+          if (isMapsRpc || isPanoLookup) {
+            let body = "";
             try {
-              inspectGoogleMapsText(xhr.responseText || xhr.response);
+              body = typeof xhr.response === "string" ? xhr.response : JSON.stringify(xhr.response) || "";
+            } catch {
+            }
+            if (!body || body === "null") {
+              try {
+                body = String(xhr.responseText || "");
+              } catch {
+              }
+            }
+            try {
+              inspectGoogleMapsText(body);
             } catch {
             }
             return;
@@ -415,61 +469,101 @@
     }
   }
 
-  function patchMapLibrary(library) {
-    if (!library || typeof library === "undefined" || patchedGlobals.has(library)) return;
-
-    if (typeof library.Map === "function") {
-      const OriginalMap = library.Map;
-      function PatchedMap() {
-        const map = Reflect.construct(OriginalMap, arguments, new.target || PatchedMap);
-        captureMap(map);
-        return map;
-      }
-      Object.setPrototypeOf(PatchedMap, OriginalMap);
-      PatchedMap.prototype = OriginalMap.prototype;
-      library.Map = PatchedMap;
+  function wrapMapClass(OriginalMap) {
+    function PatchedMap() {
+      const map = Reflect.construct(OriginalMap, arguments, new.target || PatchedMap);
+      captureMap(map);
+      return map;
     }
+    Object.setPrototypeOf(PatchedMap, OriginalMap);
+    PatchedMap.prototype = OriginalMap.prototype;
+    patchedGlobals.add(PatchedMap);
+    return PatchedMap;
+  }
 
-    if (typeof library.StreetViewPanorama === "function") {
-      const OriginalSV = library.StreetViewPanorama;
-      function PatchedSV() {
-        const pano = Reflect.construct(OriginalSV, arguments, new.target || PatchedSV);
-        if (typeof pano.addListener === "function") {
-          pano.addListener("position_changed", () => {
-            const pos = typeof pano.getPosition === "function" ? pano.getPosition() : null;
-            if (pos && typeof pos.lat === "function") {
-              rememberLocation({ lat: pos.lat(), lng: pos.lng() });
-            }
-          });
+  function wrapStreetViewClass(OriginalSV) {
+    function PatchedSV() {
+      const pano = Reflect.construct(OriginalSV, arguments, new.target || PatchedSV);
+      if (typeof pano.addListener === "function") {
+        pano.addListener("position_changed", () => {
+          const pos = typeof pano.getPosition === "function" ? pano.getPosition() : null;
+          if (pos && typeof pos.lat === "function") {
+            rememberLocation({ lat: pos.lat(), lng: pos.lng() }, 3);
+          }
+        });
+      }
+      return pano;
+    }
+    Object.setPrototypeOf(PatchedSV, OriginalSV);
+    PatchedSV.prototype = OriginalSV.prototype;
+    patchedGlobals.add(PatchedSV);
+    return PatchedSV;
+  }
+
+  function patchMapClass(namespace, className, wrap) {
+    const apply = (value) =>
+      typeof value === "function" && !patchedGlobals.has(value) ? wrap(value) : value;
+
+    try {
+      let current = apply(namespace[className]);
+      Object.defineProperty(namespace, className, {
+        configurable: true,
+        enumerable: true,
+        get() {
+          return current;
+        },
+        set(value) {
+          current = apply(value);
+        },
+      });
+    } catch {
+      try {
+        if (typeof namespace[className] === "function" && !patchedGlobals.has(namespace[className])) {
+          namespace[className] = wrap(namespace[className]);
         }
-        return pano;
+      } catch {
       }
-      Object.setPrototypeOf(PatchedSV, OriginalSV);
-      PatchedSV.prototype = OriginalSV.prototype;
-      library.StreetViewPanorama = PatchedSV;
     }
+  }
 
+  function patchMapLibrary(library) {
+    if (!library || (typeof library !== "object" && typeof library !== "function")) return;
+    if (patchedGlobals.has(library)) return;
+
+    patchMapClass(library, "Map", wrapMapClass);
+    patchMapClass(library, "StreetViewPanorama", wrapStreetViewClass);
     patchedGlobals.add(library);
   }
 
-  function hookMapLibrary(name) {
-    let current = window[name];
+  function hookMapNamespace(target, prop, onNamespace) {
+    let current = target[prop];
 
     try {
-      Object.defineProperty(window, name, {
+      Object.defineProperty(target, prop, {
         configurable: true,
+        enumerable: true,
         get() {
           return current;
         },
         set(value) {
           current = value;
-          patchMapLibrary(value);
+          if (value) onNamespace(value);
         },
       });
     } catch {
     }
 
-    patchMapLibrary(current);
+    if (current) onNamespace(current);
+  }
+
+  function hookMapLibrary(name) {
+    if (name === "google") {
+      hookMapNamespace(window, "google", (google) =>
+        hookMapNamespace(google, "maps", patchMapLibrary));
+      return;
+    }
+
+    hookMapNamespace(window, name, patchMapLibrary);
   }
 
   function visibleContainer(map) {
