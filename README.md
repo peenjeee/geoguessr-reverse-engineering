@@ -57,7 +57,7 @@ Press `Delete` to show or hide the PWA panel.
 
 - `Insert`: Open or close the browser side panel in normal tabs.
 - `Delete`: Show or hide the in-page panel in installed PWA mode.
-- `Ctrl+Shift+C`: Copy your user ID instantly without opening any panel (shows toast notification).
+- `Ctrl+Shift+C`: Copy your user ID instantly without opening any panel (shows toast notification). Then open https://gr.0xpnj.dev in any device to get round location
 
 ### Fallback behavior
 
