@@ -1,5 +1,11 @@
 (function () {
-  const SCRIPT_VERSION = "clean-v26";
+  const SCRIPT_VERSION = "clean-v28";
+  const STORE_KEY = "pnj_rnd_loc";
+  const WALK_STEP_KM = 1;
+  const USER_ID_KEY = "pnj_user_id";
+  const USER_TOKEN_KEY = "pnj_user_token";
+  const DASHBOARD_URL = "https://gr.0xpnj.dev/";
+
   const state = (window.__pnjState = window.__pnjState || {
     locations: loadLocations(),
     scoreRange: loadScoreRange(),
@@ -20,13 +26,8 @@
   window.__pnjInt = true;
   window.__pnjIntVersion = SCRIPT_VERSION;
 
-  const STORE_KEY = "pnj_rnd_loc";
   // Longer than any single Street View hop, shorter than the gap between rounds even on
   // city-sized maps, so it separates "the player walked" from "a new round started".
-  const WALK_STEP_KM = 1;
-  const USER_ID_KEY = "pnj_user_id";
-  const USER_TOKEN_KEY = "pnj_user_token";
-  const DASHBOARD_URL = "https://gr.0xpnj.dev/";
   const MAP_TARGET_SELECTOR = [
     "canvas",
     "[class*='guess-map']",
@@ -226,6 +227,7 @@
   }
 
   function broadcastToWeb(coord, targetScore = 5000, distanceKm = 0) {
+    const quality = state.currentQuality || 0;
     const payloadObject = {
       type: "round_update",
       userId,
@@ -233,6 +235,9 @@
       lng: coord.lng,
       targetScore: targetScore,
       distanceKm: distanceKm,
+      capturedAt: Date.now(),
+      quality,
+      source: quality >= 3 ? "panorama" : quality === 2 ? "anchored" : "json",
       // background.js relays this same payload as a fallback POST, so the token has to
       // travel with it. This costs nothing: the token lives in localStorage on this very
       // origin, so page scripts can already read it — it only guards against OTHER users.
@@ -367,14 +372,8 @@
       }
     }
 
-    const pattern = /-?\d{1,2}\.\d{3,},-?\d{1,3}\.\d{3,}/g;
-    while ((match = pattern.exec(str)) !== null) {
-      const [lat, lng] = match[0].split(",").map(Number);
-      if (Math.abs(lng) <= 180 && !isJunkCoord(lat, lng)) {
-        rememberLocation({ lat, lng }, 1);
-        return;
-      }
-    }
+    // Do not accept an arbitrary decimal pair from Maps RPC payloads. Those responses
+    // contain viewport, camera and tile coordinates that can point into empty ocean.
   }
 
   function extractBounds(obj, depth = 0) {
@@ -558,14 +557,24 @@
   function wrapStreetViewClass(OriginalSV) {
     function PatchedSV() {
       const pano = Reflect.construct(OriginalSV, arguments, new.target || PatchedSV);
+      resetRoundLock();
+
+      const capturePosition = () => {
+        const pos = typeof pano.getPosition === "function" ? pano.getPosition() : null;
+        if (pos && typeof pos.lat === "function" && typeof pos.lng === "function") {
+          window.__pnjHandlers.panorama({ lat: pos.lat(), lng: pos.lng() });
+        }
+      };
+
       if (typeof pano.addListener === "function") {
-        pano.addListener("position_changed", () => {
-          const pos = typeof pano.getPosition === "function" ? pano.getPosition() : null;
-          if (pos && typeof pos.lat === "function") {
-            window.__pnjHandlers.panorama({ lat: pos.lat(), lng: pos.lng() });
-          }
-        });
+        pano.addListener("position_changed", capturePosition);
+        pano.addListener("pano_changed", capturePosition);
       }
+
+      // The initial position may already be set before position_changed is observed.
+      capturePosition();
+      queueMicrotask(capturePosition);
+      setTimeout(capturePosition, 0);
       return pano;
     }
     Object.setPrototypeOf(PatchedSV, OriginalSV);
@@ -1143,6 +1152,14 @@
   let lastAutoGuess = null;
   let roundOverSeen = false;
   let lastPath = location.pathname;
+
+  document.addEventListener("click", (event) => {
+    const control = event.target?.closest?.(
+      '[data-qa="close-round-result"], [data-qa="play-next-round"]',
+    );
+    if (control) resetRoundLock();
+  }, true);
+
   if (window.__pnjBotTimer) clearInterval(window.__pnjBotTimer);
   window.__pnjBotTimer = setInterval(async () => {
     const roundOver = document.querySelector('[data-qa="close-round-result"]') ||
@@ -1412,7 +1429,7 @@
           <button data-pnj-place="nearby" type="button">Place range</button>
         </div>
         <button data-pnj-refresh type="button">Refresh map</button>
-        <iframe data-pnj-map title="Round map"></iframe>
+        <iframe data-pnj-map title="Round map" loading="eager" fetchpriority="high"></iframe>
         <small>&copy;<span data-pnj-year></span></small>
       </div>
     `;
@@ -1446,8 +1463,8 @@
       }
     };
     let lastMapSrc = "";
-    const refreshMap = () => {
-      const coord = currentCoord();
+    const refreshMap = (nextCoord) => {
+      const coord = isCoord(nextCoord) ? nextCoord : currentCoord();
       if (!isCoord(coord)) return;
       const src = `https://maps.google.com/maps?q=${coord.lat},${coord.lng}&z=6&output=embed`;
       if (src !== lastMapSrc) {
@@ -1519,7 +1536,7 @@
     // handlers first — otherwise they pile up on window for the whole session.
     if (window.__pnjPanelLocHandler) window.removeEventListener("pnj_loc_upd", window.__pnjPanelLocHandler);
     if (window.__pnjPanelBotHandler) window.removeEventListener("pnj_autobot_upd", window.__pnjPanelBotHandler);
-    window.__pnjPanelLocHandler = refreshMap;
+    window.__pnjPanelLocHandler = (event) => refreshMap(event.detail);
     window.__pnjPanelBotHandler = (e) => {
       state.autoBot = e.detail;
       updateAutoBotButton();

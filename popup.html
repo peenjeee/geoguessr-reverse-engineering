@@ -4,6 +4,9 @@
 <head>
   <meta charset="utf-8">
   <title>PNJ GeoGuessr Tools</title>
+  <link rel="preconnect" href="https://maps.google.com">
+  <link rel="preconnect" href="https://www.google.com">
+  <link rel="preconnect" href="https://maps.gstatic.com" crossorigin>
   <style>
     :root {
       --gg-font: "GeoGuessr", "Neo Sans Std", "Nunito Sans", "Arial Rounded MT Bold", system-ui, sans-serif;
@@ -268,7 +271,7 @@
       </div>
       <button data-map-toggle>Refresh map</button>
       <div id="map-panel" class="map-card">
-        <iframe id="map-frame" title="Round map" loading="lazy"></iframe>
+        <iframe id="map-frame" title="Round map" loading="eager" fetchpriority="high"></iframe>
       </div>
       <footer class="copyright">©<span id="copyright-year"></span></footer>
       <div id="status"></div>

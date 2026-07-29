@@ -197,9 +197,12 @@ async function currentRound() {
     return {};
   }
 
-  await inject(tab, "internal.js", "MAIN");
+  let pickedStatus = pickStatusResult(await statusResults(tab));
+  if (!pickedStatus?.result?.ready) {
+    await inject(tab, "internal.js", "MAIN");
+    pickedStatus = pickStatusResult(await statusResults(tab));
+  }
 
-  const pickedStatus = pickStatusResult(await statusResults(tab));
   const data = pickedStatus?.result;
   if (!data?.current) {
     statusBox.textContent = formatStatus(data);

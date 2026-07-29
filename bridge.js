@@ -1,6 +1,22 @@
 (() => {
   if (window.__pnjBridge) return;
   window.__pnjBridge = true;
+  let lastTelemetryKey = "";
+
+  function forwardTelemetry(payload) {
+    if (typeof payload?.lat !== "number" || typeof payload?.lng !== "number" || !payload.userId) return;
+
+    // internal.js emits both a CustomEvent and postMessage for compatibility. Collapse
+    // the identical pair before it wakes the service worker and performs duplicate POSTs.
+    const key = JSON.stringify(payload);
+    if (key === lastTelemetryKey) return;
+    lastTelemetryKey = key;
+
+    try {
+      chrome.runtime.sendMessage({ type: "pnj-telemetry", payload }).catch(() => {});
+    } catch (err) {
+    }
+  }
 
   window.addEventListener("pnj_loc_upd", (event) => {
     const coord = event.detail;
@@ -15,15 +31,7 @@
   });
 
   window.addEventListener("pnj_telemetry", (event) => {
-    const payload = event.detail;
-    if (typeof payload?.lat !== "number" || typeof payload?.lng !== "number" || !payload.userId) return;
-
-    try {
-      if (chrome.runtime?.sendMessage) {
-        chrome.runtime.sendMessage({ type: "pnj-telemetry", payload }).catch(() => {});
-      }
-    } catch (err) {
-    }
+    forwardTelemetry(event.detail);
   });
 
   window.addEventListener("message", (event) => {
@@ -39,14 +47,6 @@
     }
 
     if (event.data?.type !== "pnj-telemetry") return;
-    const payload = event.data.payload;
-    if (typeof payload?.lat !== "number" || typeof payload?.lng !== "number" || !payload.userId) return;
-
-    try {
-      if (chrome.runtime?.sendMessage) {
-        chrome.runtime.sendMessage({ type: "pnj-telemetry", payload }).catch(() => {});
-      }
-    } catch (err) {
-    }
+    forwardTelemetry(event.data.payload);
   });
 })();
