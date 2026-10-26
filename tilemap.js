@@ -12,6 +12,7 @@
   const FIT_PADDING = 40;
   const MAX_LATITUDE = 85.0511287798;
   const WHEEL_STEP_MS = 150;
+  const ZOOM_ANIMATION_MS = 220;
   const ANSWER_ID = "answer";
   const SVG_NS = "http://www.w3.org/2000/svg";
   const PIN_COLORS = { answer: "#e53935", opponent: "#1e6bff" };
@@ -113,14 +114,33 @@
     return { x: Math.round(view.x - width / 2), y: Math.round(view.y - height / 2) };
   }
 
+  // Tiles exist only at whole zoom levels; a view between two levels shows the nearer one, scaled.
+  function tileZoomOf(view) {
+    return clamp(Math.round(view.zoom), MIN_ZOOM, MAX_ZOOM);
+  }
+
+  // Each edge is rounded on its own, so neighbouring tiles meet without a seam at any scale.
+  function tileRect(tileZoom, col, row, view, origin) {
+    const span = TILE_SIZE * 2 ** (view.zoom - tileZoom);
+    const left = Math.round(col * span) - origin.x;
+    const top = Math.round(row * span) - origin.y;
+    return {
+      left,
+      top,
+      width: Math.round((col + 1) * span) - origin.x - left,
+      height: Math.round((row + 1) * span) - origin.y - top,
+    };
+  }
+
   function visibleTiles(view, width, height) {
-    const { zoom } = view;
+    const zoom = tileZoomOf(view);
     const count = 2 ** zoom;
+    const span = TILE_SIZE * 2 ** (view.zoom - zoom);
     const origin = viewOrigin(view, width, height);
-    const firstCol = Math.floor(origin.x / TILE_SIZE);
-    const lastCol = Math.floor((origin.x + width - 1) / TILE_SIZE);
-    const firstRow = Math.max(0, Math.floor(origin.y / TILE_SIZE));
-    const lastRow = Math.min(count - 1, Math.floor((origin.y + height - 1) / TILE_SIZE));
+    const firstCol = Math.floor(origin.x / span);
+    const lastCol = Math.floor((origin.x + width - 1) / span);
+    const firstRow = Math.max(0, Math.floor(origin.y / span));
+    const lastRow = Math.min(count - 1, Math.floor((origin.y + height - 1) / span));
     const tiles = [];
     for (let row = firstRow; row <= lastRow; row += 1) {
       for (let col = firstCol; col <= lastCol; col += 1) {
@@ -130,8 +150,10 @@
           key: `${zoom}/${col}/${row}`,
           coord: `${zoom}/${x}/${row}`,
           url: `https://mt${(x + row) % 4}.google.com/vt/lyrs=m&hl=en&x=${x}&y=${row}&z=${zoom}`,
-          left: col * TILE_SIZE - origin.x,
-          top: row * TILE_SIZE - origin.y,
+          zoom,
+          col,
+          row,
+          ...tileRect(zoom, col, row, view, origin),
         });
       }
     }
@@ -214,41 +236,60 @@
     return element;
   }
 
-  function createTileImage(doc, tile) {
+  function createTileImage(doc, tile, onLoad) {
     const img = doc.createElement("img");
     img.setAttribute("data-pnj-tile", tile.coord);
     img.alt = "";
     img.draggable = false;
     img.decoding = "async";
     img.style.cssText =
-      `position:absolute;display:block;width:${TILE_SIZE}px;height:${TILE_SIZE}px;` +
-      "max-width:none;max-height:none;margin:0;padding:0;border:0;user-select:none;";
+      "position:absolute;display:block;max-width:none;max-height:none;margin:0;padding:0;border:0;user-select:none;";
+    img.addEventListener("load", onLoad);
+    img.addEventListener("error", onLoad);
     img.src = tile.url;
     return img;
   }
 
-  function createTileLayer(doc) {
+  function placeTile(img, rect, layer) {
+    img.style.left = `${rect.left}px`;
+    img.style.top = `${rect.top}px`;
+    img.style.width = `${rect.width}px`;
+    img.style.height = `${rect.height}px`;
+    img.style.zIndex = layer;
+  }
+
+  // When the zoom level changes, the previous level's tiles stay underneath, scaled to the
+  // new view, until every new tile has loaded, so a zoom never flashes an empty map.
+  function createTileLayer(doc, onTileLoad) {
     const element = createLayerElement(doc);
-    const images = new Map();
+    // Its own stacking context keeps the tile z-indexes below the marker layer.
+    element.style.zIndex = "0";
+    const tiles = new Map();
     return {
       element,
-      sync(tiles) {
+      sync(view, width, height) {
+        const visible = visibleTiles(view, width, height);
+        const zoom = tileZoomOf(view);
+        const origin = viewOrigin(view, width, height);
         const wanted = new Set();
-        for (const tile of tiles) {
+        for (const tile of visible) {
           wanted.add(tile.key);
-          let img = images.get(tile.key);
-          if (!img) {
-            img = createTileImage(doc, tile);
-            images.set(tile.key, img);
-            element.appendChild(img);
+          let entry = tiles.get(tile.key);
+          if (!entry) {
+            entry = { img: createTileImage(doc, tile, onTileLoad), zoom: tile.zoom, col: tile.col, row: tile.row };
+            tiles.set(tile.key, entry);
+            element.appendChild(entry.img);
           }
-          img.style.left = `${tile.left}px`;
-          img.style.top = `${tile.top}px`;
+          placeTile(entry.img, tile, "1");
         }
-        for (const [key, img] of images) {
-          if (!wanted.has(key)) {
-            img.remove();
-            images.delete(key);
+        const loading = visible.some((tile) => !tiles.get(tile.key).img.complete);
+        for (const [key, entry] of tiles) {
+          if (wanted.has(key)) continue;
+          if (!loading || Math.abs(entry.zoom - zoom) !== 1) {
+            entry.img.remove();
+            tiles.delete(key);
+          } else {
+            placeTile(entry.img, tileRect(entry.zoom, entry.col, entry.row, view, origin), "0");
           }
         }
       },
@@ -347,27 +388,18 @@
     return element;
   }
 
-  function attachInteraction(container, getView, setView) {
+  function attachInteraction(container, { getView, setView, zoomBy, finishZoom }) {
     let drag = null;
     let lastWheelStepAt = -Infinity;
 
     const zoomAround = (event, step) => {
       const rect = container.getBoundingClientRect();
-      const view = getView();
-      setView(
-        zoomAt(
-          view,
-          view.zoom + step,
-          event.clientX - rect.left,
-          event.clientY - rect.top,
-          container.clientWidth,
-          container.clientHeight,
-        ),
-      );
+      zoomBy(step, event.clientX - rect.left, event.clientY - rect.top);
     };
 
     const onPointerDown = (event) => {
       if (event.button !== 0 || drag) return;
+      finishZoom();
       drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
       container.style.cursor = "grabbing";
       try {
@@ -433,12 +465,24 @@
       isolation: "isolate",
     });
 
-    const tileLayer = createTileLayer(doc);
+    const win = doc.defaultView || window;
+    let renderQueued = false;
+    const scheduleRender = () => {
+      if (renderQueued || destroyed) return;
+      renderQueued = true;
+      win.requestAnimationFrame(() => {
+        renderQueued = false;
+        if (!destroyed) render();
+      });
+    };
+
+    const tileLayer = createTileLayer(doc, scheduleRender);
     const markerLayer = createMarkerLayer(doc);
     container.replaceChildren(tileLayer.element, markerLayer.element, createAttribution(doc));
 
     let state = { markers: [], view: fitView([], 0, 0), fitKey: "", answerKey: "", userMoved: false };
     let destroyed = false;
+    let zoomAnimation = null;
 
     function render() {
       const width = container.clientWidth;
@@ -449,11 +493,12 @@
         const answerKey = answerKeyOf(state.markers);
         // Opponent pins move constantly, so after the user pans or zooms only a new answer re-fits.
         const refit = !state.userMoved || answerKey !== state.answerKey;
+        if (refit) stopZoom();
         state = refit
           ? { ...state, view: fitView(state.markers, width, height), fitKey, answerKey, userMoved: false }
           : { ...state, fitKey, answerKey };
       }
-      tileLayer.sync(visibleTiles(state.view, width, height));
+      tileLayer.sync(state.view, width, height);
       markerLayer.sync(placeMarkers(state.markers, state.view, width, height));
     }
 
@@ -462,7 +507,47 @@
       render();
     }
 
-    const detach = attachInteraction(container, () => state.view, setView);
+    function stopZoom() {
+      if (!zoomAnimation) return;
+      win.cancelAnimationFrame(zoomAnimation.frame);
+      zoomAnimation = null;
+    }
+
+    // A drag lands the zoom on its target first, so the map never rests between two levels.
+    function finishZoom() {
+      if (!zoomAnimation) return;
+      const { finish } = zoomAnimation;
+      stopZoom();
+      finish();
+    }
+
+    // Each step eases to the next whole zoom around the pointer. A step during an animation
+    // starts from wherever the view is and moves the target one level further.
+    function zoomBy(step, px, py) {
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      if (!width || !height) return;
+      const from = state.view;
+      const target = clamp((zoomAnimation ? zoomAnimation.target : Math.round(from.zoom)) + step, MIN_ZOOM, MAX_ZOOM);
+      stopZoom();
+      if (target === from.zoom) return;
+
+      const startedAt = win.performance.now();
+      const animation = { target, frame: 0, finish: () => setView(zoomAt(from, target, px, py, width, height)) };
+      const tick = (now) => {
+        if (zoomAnimation !== animation) return;
+        const progress = clamp((now - startedAt) / ZOOM_ANIMATION_MS, 0, 1);
+        const eased = 1 - (1 - progress) ** 3;
+        const zoom = progress === 1 ? target : from.zoom + (target - from.zoom) * eased;
+        setView(zoomAt(from, zoom, px, py, width, height));
+        if (progress < 1) animation.frame = win.requestAnimationFrame(tick);
+        else zoomAnimation = null;
+      };
+      zoomAnimation = animation;
+      animation.frame = win.requestAnimationFrame(tick);
+    }
+
+    const detach = attachInteraction(container, { getView: () => state.view, setView, zoomBy, finishZoom });
     const observer = new ResizeObserver(render);
     observer.observe(container);
 
@@ -475,6 +560,7 @@
       destroy() {
         if (destroyed) return;
         destroyed = true;
+        stopZoom();
         observer.disconnect();
         detach();
         container.replaceChildren();
