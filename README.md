@@ -16,6 +16,7 @@ cd geoguessr-reverse-engineering
 - **Built-in Auto Bot**: Farm EXP seamlessly in the background with auto-guess and auto-next round.
 - **Place exact**: Drop the pin on the captured round location.
 - **Place range**: Choose a score range (0 - 5000) and place close enough.
+- **Opponent pin (Duels / Team Duels)**: Draws the opponent's live map pin and submitted guess next to the round answer on the same map, with distance and estimated score. GeoGuessr only streams the live pin to you after you have guessed. Also sent to the web resolver as `opponent_update`, with positional ids only.
 - **MapLibre GL / MapCN Engine**: Smooth light vector map preview.
 - **Browser side panel**: For normal Chrome/Brave tabs.
 - **In-page PWA launcher**: Fallback for installed GeoGuessr PWA windows.

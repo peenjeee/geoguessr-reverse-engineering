@@ -1,5 +1,5 @@
 (function () {
-  const SCRIPT_VERSION = "clean-v28";
+  const SCRIPT_VERSION = "clean-v29";
   const STORE_KEY = "pnj_rnd_loc";
   const WALK_STEP_KM = 1;
   const USER_ID_KEY = "pnj_user_id";
@@ -17,9 +17,11 @@
     lastGoogleCoord: null,
     mapScale: null,
     autoBot: false,
+    duel: emptyDuel(),
   });
 
   if (!state.scoreRange) state.scoreRange = loadScoreRange();
+  if (!state.duel) state.duel = emptyDuel();
 
   if (window.__pnjInt && window.__pnjIntVersion === SCRIPT_VERSION) return;
 
@@ -226,23 +228,7 @@
     return found;
   }
 
-  function broadcastToWeb(coord, targetScore = 5000, distanceKm = 0) {
-    const quality = state.currentQuality || 0;
-    const payloadObject = {
-      type: "round_update",
-      userId,
-      lat: coord.lat,
-      lng: coord.lng,
-      targetScore: targetScore,
-      distanceKm: distanceKm,
-      capturedAt: Date.now(),
-      quality,
-      source: quality >= 3 ? "panorama" : quality === 2 ? "anchored" : "json",
-      // background.js relays this same payload as a fallback POST, so the token has to
-      // travel with it. This costs nothing: the token lives in localStorage on this very
-      // origin, so page scripts can already read it — it only guards against OTHER users.
-      token: userToken
-    };
+  function postTelemetry(payloadObject) {
     const payload = JSON.stringify(payloadObject);
 
     window.dispatchEvent(new CustomEvent("pnj_telemetry", { detail: payloadObject }));
@@ -261,6 +247,27 @@
       channel.postMessage(JSON.parse(payload));
       channel.close();
     } catch (e) { }
+  }
+
+  function broadcastToWeb(coord, targetScore = 5000, distanceKm = 0) {
+    const quality = state.currentQuality || 0;
+    const payloadObject = {
+      type: "round_update",
+      userId,
+      lat: coord.lat,
+      lng: coord.lng,
+      targetScore: targetScore,
+      distanceKm: distanceKm,
+      capturedAt: Date.now(),
+      quality,
+      source: quality >= 3 ? "panorama" : quality === 2 ? "anchored" : "json",
+      // background.js relays this same payload as a fallback POST, so the token has to
+      // travel with it. This costs nothing: the token lives in localStorage on this very
+      // origin, so page scripts can already read it — it only guards against OTHER users.
+      token: userToken
+    };
+
+    postTelemetry(payloadObject);
   }
 
   function rememberLocations(candidates) {
@@ -402,6 +409,205 @@
     return null;
   }
 
+  const GAME_SERVER_HOST = /^(gs\d*|game-server)\.geoguessr\.com$/;
+  const HIDDEN_GUESS = "hidden";
+  const NO_OPPONENT = Object.freeze({ pin: null, guess: null });
+  const MAX_TELEMETRY_OPPONENTS = 8;
+
+  function emptyDuel(selfId = null) {
+    return { gameId: null, selfId, round: 0, opponents: {} };
+  }
+
+  // Unlike isJunkCoord this accepts a pin anywhere on the map. Only 0,0 is refused,
+  // because a coordinate the server withholds may arrive as zeros.
+  function opponentCoord(value) {
+    if (!isCoord(value) || (value.lat === 0 && value.lng === 0)) return null;
+    return { lat: value.lat, lng: value.lng };
+  }
+
+  function playersOf(team) {
+    return Array.isArray(team?.players) ? team.players : [];
+  }
+
+  function withSelf(duel, frame) {
+    const playerId = frame.code === "SubscribeToLobby" ? frame.playerId : null;
+    if (typeof playerId !== "string" || !playerId || playerId === duel.selfId) return duel;
+    return { ...duel, selfId: playerId };
+  }
+
+  function applySample(opponent, sample) {
+    const coord = opponentCoord(sample.payload);
+    switch (sample.type) {
+      case "PinPosition":
+        return coord ? { ...opponent, pin: coord } : opponent;
+      case "PinRemove":
+        return { ...opponent, pin: null };
+      case "GuessWithLatLng":
+        return coord ? { ...opponent, guess: coord } : opponent;
+      default:
+        return opponent;
+    }
+  }
+
+  function withLiveSamples(duel, frame) {
+    const playerId = frame.playerId;
+    if (typeof playerId !== "string" || !playerId || playerId === duel.selfId) return duel;
+    if (!Array.isArray(frame.payload)) return duel;
+    if (duel.gameId && !Object.prototype.hasOwnProperty.call(duel.opponents, playerId)) return duel;
+
+    const samples = frame.payload
+      .filter((sample) => sample && typeof sample === "object")
+      .sort((left, right) => (Number(left.time) || 0) - (Number(right.time) || 0));
+    const previous = duel.opponents[playerId] || NO_OPPONENT;
+    const next = samples.reduce(applySample, previous);
+    if (next === previous) return duel;
+    return { ...duel, opponents: { ...duel.opponents, [playerId]: next } };
+  }
+
+  // The stream can hand over a guess before the state push stops hiding it, so a
+  // coordinate already seen is never downgraded to "hidden".
+  function mergeGuess(known, reported) {
+    if (reported && reported !== HIDDEN_GUESS) return reported;
+    if (known && known !== HIDDEN_GUESS) return known;
+    return reported || known;
+  }
+
+  function opponentFromPlayer(player, previous, round) {
+    const known = previous || NO_OPPONENT;
+    const guesses = Array.isArray(player.guesses) ? player.guesses : [];
+    const entry = guesses.find((guess) => guess?.roundNumber === round);
+    const reported = entry ? opponentCoord(entry) || HIDDEN_GUESS : null;
+
+    return {
+      pin: opponentCoord(player.pin) || known.pin,
+      guess: mergeGuess(known.guess, reported),
+    };
+  }
+
+  // Every state push is the full duel state, so the opponent set is rebuilt from it:
+  // teammates that arrived through the stream drop out as soon as a push shows the teams,
+  // and withLiveSamples accepts no new player once a push has named them.
+  function withDuelState(duel, duelState) {
+    if (!duel.selfId || typeof duelState.gameId !== "string" || !Array.isArray(duelState.teams)) return duel;
+
+    const base = !duel.gameId || duel.gameId === duelState.gameId ? duel : emptyDuel(duel.selfId);
+    const round = Number.isFinite(duelState.currentRoundNumber) ? duelState.currentRoundNumber : base.round;
+    const previous = base.round === 0 || base.round === round ? base.opponents : {};
+    const ownTeam = duelState.teams.find((team) =>
+      playersOf(team).some((player) => player?.playerId === duel.selfId));
+
+    const opponents = Object.fromEntries(
+      duelState.teams
+        .filter((team) => team !== ownTeam)
+        .flatMap(playersOf)
+        .filter((player) => typeof player?.playerId === "string")
+        .map((player) => [player.playerId, opponentFromPlayer(player, previous[player.playerId], round)]),
+    );
+
+    return { gameId: duelState.gameId, selfId: duel.selfId, round, opponents };
+  }
+
+  function opponentStatus({ pin, guess }) {
+    if (guess === HIDDEN_GUESS) return "guessed";
+    if (guess) return "guess";
+    return pin ? "pin" : "waiting";
+  }
+
+  // The one contract consumers read, through pnj_opp_upd and __pnjCmdStatus. The score
+  // inverts the curve nearbyCoord aims along.
+  function opponentView() {
+    const answer = currentCoord();
+    const scale = state.mapScale || 1492;
+
+    return {
+      round: state.duel.round,
+      opponents: Object.entries(state.duel.opponents).map(([playerId, opponent]) => {
+        const status = opponentStatus(opponent);
+        const coord = { guess: opponent.guess, pin: opponent.pin }[status] || null;
+        const km = coord && isCoord(answer)
+          ? distanceKm(answer.lat, answer.lng, coord.lat, coord.lng)
+          : null;
+
+        return {
+          playerId,
+          status,
+          lat: coord ? coord.lat : null,
+          lng: coord ? coord.lng : null,
+          distanceKm: km,
+          score: km === null ? null : Math.round(5000 * Math.exp(-km / scale)),
+        };
+      }),
+    };
+  }
+
+  // GeoGuessr player ids never leave the browser: the dashboard gets positional ids.
+  function opponentTelemetry(view) {
+    return {
+      type: "opponent_update",
+      userId,
+      token: userToken,
+      capturedAt: Date.now(),
+      round: view.round,
+      opponents: view.opponents.slice(0, MAX_TELEMETRY_OPPONENTS).map((opponent, index) => ({
+        id: `opponent-${index + 1}`,
+        status: opponent.status,
+        lat: opponent.lat,
+        lng: opponent.lng,
+        distanceKm: opponent.distanceKm,
+        score: opponent.score,
+      })),
+    };
+  }
+
+  // Samples arrive every ~256 ms and mostly repeat the last pin, so only a changed view
+  // is worth publishing. The top frame publishes its first view even when empty so a
+  // reload clears stale pins; iframes keep the seeded key so their empty view cannot
+  // overwrite the top frame's live one.
+  let lastOpponentKey = window === window.top ? "" : JSON.stringify(opponentView());
+  function publishOpponents() {
+    const view = opponentView();
+    const key = JSON.stringify(view);
+    if (key === lastOpponentKey) return;
+
+    lastOpponentKey = key;
+    window.dispatchEvent(new CustomEvent("pnj_opp_upd", { detail: view }));
+    postTelemetry(opponentTelemetry(view));
+  }
+
+  function commitDuel(duel) {
+    if (duel === state.duel) return;
+    state.duel = duel;
+    publishOpponents();
+  }
+
+  function parseGameFrame(text) {
+    try {
+      const frame = JSON.parse(text);
+      return frame && typeof frame === "object" ? frame : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function handleGameSend(text) {
+    const frame = parseGameFrame(text);
+    if (frame) commitDuel(withSelf(state.duel, frame));
+  }
+
+  function handleGameFrame(text) {
+    const frame = parseGameFrame(text);
+    if (!frame) return;
+
+    if (frame.code === "LiveStreamSamples") {
+      commitDuel(withLiveSamples(state.duel, frame));
+      return;
+    }
+
+    const duelState = frame.duel && frame.duel.state;
+    if (!duelState || (frame.gameId && frame.gameId !== duelState.gameId)) return;
+    commitDuel(withDuelState(state.duel, duelState));
+  }
+
   // The fetch/XHR proxies are installed once per tab and survive re-injection, so if they
   // closed over these functions directly they would keep running the version that first
   // patched them — an upgraded script would re-run yet never actually take effect. Routing
@@ -411,6 +617,8 @@
     jsonText: (text, url) => inspectText(text, url),
     jsonObject: (object, url) => rememberLocations(collectCoords(object, url)),
     panorama: (coord) => rememberLocation(coord, 3),
+    gameFrame: (text) => handleGameFrame(text),
+    gameSend: (text) => handleGameSend(text),
   };
 
   function inspectText(text, url) {
@@ -530,6 +738,54 @@
       }
     });
     patchedGlobals.add(window.XMLHttpRequest);
+  }
+
+  function isGameServerUrl(url) {
+    try {
+      return GAME_SERVER_HOST.test(new URL(String(url), location.href).hostname);
+    } catch {
+      return false;
+    }
+  }
+
+  function observeGameSocket(socket) {
+    socket.addEventListener("message", (event) => {
+      const data = event.data;
+      if (typeof data !== "string" || data[0] !== "{") return;
+      try {
+        window.__pnjHandlers.gameFrame(data);
+      } catch {
+      }
+    });
+
+    socket.send = new Proxy(socket.send, {
+      apply: function (target, thisArg, args) {
+        const data = args[0];
+        if (typeof data === "string" && data[0] === "{") {
+          try {
+            window.__pnjHandlers.gameSend(data);
+          } catch {
+          }
+        }
+        return Reflect.apply(target, thisArg, args);
+      }
+    });
+  }
+
+  function patchWebSocket() {
+    if (typeof window.WebSocket !== "function" || patchedGlobals.has(window.WebSocket)) return;
+
+    window.WebSocket = new Proxy(window.WebSocket, {
+      construct: function (target, args, newTarget) {
+        const socket = Reflect.construct(target, args, newTarget);
+        try {
+          if (isGameServerUrl(args[0])) observeGameSocket(socket);
+        } catch {
+        }
+        return socket;
+      }
+    });
+    patchedGlobals.add(window.WebSocket);
   }
 
   function captureMap(map) {
@@ -1094,6 +1350,7 @@
       clickTargets: mapCandidates().length,
       targetSummary: targetSummary(),
       visibleActions: visibleActionSummary(),
+      opponents: opponentView(),
       badge: "",
     };
   };
@@ -1183,6 +1440,10 @@
       resetRoundLock();
       // Drop the cached map scale so a different map re-measures its own bounds.
       state.mapScale = null;
+      // The first state push of a new game can land before this 2 s tick sees the new path.
+      if (!state.duel.gameId || !location.pathname.includes(state.duel.gameId)) {
+        commitDuel(emptyDuel(state.duel.selfId));
+      }
     }
 
     if (!state.autoBot) return;
@@ -1240,18 +1501,24 @@
     );
   }
 
+  function removePwaPanel() {
+    window.__pnjPanelMap?.destroy();
+    window.__pnjPanelMap = null;
+    document.getElementById("pnj-pwa-panel")?.remove();
+  }
+
   function togglePwaPanelVisibility() {
     const panel = document.getElementById("pnj-pwa-panel");
     if (!panel) {
       ensurePwaPanel(true);
       return;
     }
-    panel.remove();
+    removePwaPanel();
   }
 
   function ensurePwaPanel(force = false) {
     if (window.top !== window || (!force && !isPwaWindow())) return;
-    document.getElementById("pnj-pwa-panel")?.remove();
+    removePwaPanel();
 
     const host = document.createElement("div");
     host.id = "pnj-pwa-panel";
@@ -1389,14 +1656,38 @@
           box-shadow: 0 2px 0 rgba(58,11,111,.65);
           pointer-events: auto;
         }
-        #pnj-pwa-panel iframe {
+        #pnj-pwa-panel [data-pnj-map] {
+          position: relative;
           width: 100%;
           height: 210px;
+          overflow: hidden;
           border: 2px solid rgba(255,255,255,.18);
           border-radius: 16px;
           background: rgba(24,6,68,.42);
           box-shadow: inset 0 2px 0 rgba(255, 255, 255, .08);
         }
+        #pnj-pwa-panel [data-pnj-map-view] {
+          width: 100%;
+          height: 100%;
+        }
+        #pnj-pwa-panel .opp-note {
+          position: absolute;
+          top: 8px;
+          left: 8px;
+          z-index: 2;
+          max-width: calc(100% - 16px);
+          padding: 4px 10px;
+          border: 2px solid rgba(255,255,255,.18);
+          border-radius: 12px;
+          background: rgba(24,6,68,.82);
+          color: #fff;
+          font-size: 11px;
+          line-height: 1.3;
+          text-shadow: 0 1px 0 rgba(30,8,92,.55);
+          white-space: pre-line;
+          pointer-events: none;
+        }
+        #pnj-pwa-panel .opp-note[hidden] { display: none; }
         #pnj-pwa-panel small {
           display: block;
           margin-top: 8px;
@@ -1429,7 +1720,7 @@
           <button data-pnj-place="nearby" type="button">Place range</button>
         </div>
         <button data-pnj-refresh type="button">Refresh map</button>
-        <iframe data-pnj-map title="Round map" loading="eager" fetchpriority="high"></iframe>
+        <div class="round-view" data-pnj-map><div data-pnj-map-view></div><div class="opp-note" data-pnj-opp-note hidden></div></div>
         <small>&copy;<span data-pnj-year></span></small>
       </div>
     `;
@@ -1439,7 +1730,8 @@
     const valMinInput = host.querySelector("[data-pnj-val-min]");
     const valMaxInput = host.querySelector("[data-pnj-val-max]");
     const rangeSlider = host.querySelector("[data-pnj-slider]");
-    const mapFrame = host.querySelector("[data-pnj-map]");
+    const mapView = host.querySelector("[data-pnj-map-view]");
+    const oppNote = host.querySelector("[data-pnj-opp-note]");
     const scoreRange = () => {
       let min = Math.max(0, Math.min(5000, Number(minInput.value || 4500)));
       let max = Math.max(0, Math.min(5000, Number(maxInput.value || 5000)));
@@ -1462,15 +1754,15 @@
         valMaxInput.value = range.max;
       }
     };
-    let lastMapSrc = "";
-    const refreshMap = (nextCoord) => {
-      const coord = isCoord(nextCoord) ? nextCoord : currentCoord();
-      if (!isCoord(coord)) return;
-      const src = `https://maps.google.com/maps?q=${coord.lat},${coord.lng}&z=6&output=embed`;
-      if (src !== lastMapSrc) {
-        lastMapSrc = src;
-        mapFrame.src = src;
-      }
+    const mountPanelMap = () => {
+      window.__pnjPanelMap?.destroy();
+      window.__pnjPanelMap = window.__pnjTileMap.mount(mapView);
+    };
+    const renderPanelMap = () => {
+      const { markers, note } = window.__pnjTileMap.markersFor(currentCoord(), opponentView());
+      window.__pnjPanelMap?.setMarkers(markers);
+      oppNote.textContent = note;
+      oppNote.hidden = !note;
     };
 
     const updateAutoBotButton = () => {
@@ -1508,7 +1800,7 @@
       if (!button) return;
       if (button.dataset.pnjToggle !== undefined) {
         host.dataset.open = String(host.dataset.open !== "true");
-        refreshMap();
+        renderPanelMap();
         return;
       }
       if (button.dataset.pnjCopyId !== undefined) {
@@ -1527,21 +1819,27 @@
         window.dispatchEvent(new CustomEvent("pnj_autobot_upd", { detail: state.autoBot }));
         return;
       }
-      if (button.dataset.pnjRefresh !== undefined) refreshMap();
+      if (button.dataset.pnjRefresh !== undefined) {
+        mountPanelMap();
+        renderPanelMap();
+      }
       if (button.dataset.pnjPlace) {
-        window.__pnjCmdPlace(currentCoord(), button.dataset.pnjPlace, { scoreRange: scoreRange() }).then(refreshMap);
+        window.__pnjCmdPlace(currentCoord(), button.dataset.pnjPlace, { scoreRange: scoreRange() }).then(renderPanelMap);
       }
     });
     // The panel is rebuilt on every show/hide, so detach the previous instance's
     // handlers first — otherwise they pile up on window for the whole session.
     if (window.__pnjPanelLocHandler) window.removeEventListener("pnj_loc_upd", window.__pnjPanelLocHandler);
+    if (window.__pnjPanelOppHandler) window.removeEventListener("pnj_opp_upd", window.__pnjPanelOppHandler);
     if (window.__pnjPanelBotHandler) window.removeEventListener("pnj_autobot_upd", window.__pnjPanelBotHandler);
-    window.__pnjPanelLocHandler = (event) => refreshMap(event.detail);
+    window.__pnjPanelLocHandler = () => renderPanelMap();
+    window.__pnjPanelOppHandler = () => renderPanelMap();
     window.__pnjPanelBotHandler = (e) => {
       state.autoBot = e.detail;
       updateAutoBotButton();
     };
     window.addEventListener("pnj_loc_upd", window.__pnjPanelLocHandler);
+    window.addEventListener("pnj_opp_upd", window.__pnjPanelOppHandler);
     window.addEventListener("pnj_autobot_upd", window.__pnjPanelBotHandler);
 
     const savedRange = state.scoreRange || loadScoreRange();
@@ -1552,15 +1850,16 @@
 
     updateRange();
     updateAutoBotButton();
-    refreshMap();
     document.documentElement.appendChild(host);
+    mountPanelMap();
+    renderPanelMap();
   }
 
   document.documentElement.dataset.pnjInt = "ready";
   clearBadge();
   window.__pnjBroadcastToWeb = broadcastToWeb;
   window.__pnjShowPanel = () => ensurePwaPanel(true);
-  window.__pnjHidePanel = () => document.getElementById("pnj-pwa-panel")?.remove();
+  window.__pnjHidePanel = removePwaPanel;
 
   if (window.__pnjKeyHandler) window.removeEventListener("keydown", window.__pnjKeyHandler);
   window.__pnjKeyHandler = (event) => {
@@ -1594,8 +1893,14 @@
   ensurePwaPanel();
   window.addEventListener("DOMContentLoaded", ensurePwaPanel, { once: true });
   window.addEventListener("DOMContentLoaded", clearBadge, { once: true });
+  // Distances depend on the round answer, which can be captured after the opponent's
+  // coordinates arrive, so a new answer must be able to republish the view.
+  if (window.__pnjOppLocHandler) window.removeEventListener("pnj_loc_upd", window.__pnjOppLocHandler);
+  window.__pnjOppLocHandler = publishOpponents;
+  window.addEventListener("pnj_loc_upd", window.__pnjOppLocHandler);
   patchFetch();
   patchXhr();
+  patchWebSocket();
   hookMapLibrary("google");
   hookMapLibrary("mapboxgl");
   hookMapLibrary("maplibregl");

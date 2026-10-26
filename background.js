@@ -19,7 +19,7 @@ async function showPagePanel(tab, popupPath) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id, allFrames: true },
-      files: ["internal.js"],
+      files: ["tilemap.js", "internal.js"],
       world: "MAIN",
     });
     await chrome.scripting.executeScript({

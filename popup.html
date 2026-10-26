@@ -192,6 +192,7 @@
     }
 
     .map-card {
+      position: relative;
       flex: 1 1 auto;
       min-height: 0;
       overflow: hidden;
@@ -202,11 +203,27 @@
       box-shadow: inset 0 2px 0 rgba(255, 255, 255, .08);
     }
 
-    .map-card iframe {
+    #round-map {
       width: 100%;
-      height: calc(100% + 44px);
-      border: 0;
-      display: block;
+      height: 100%;
+    }
+
+    #opp-note {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      z-index: 2;
+      max-width: calc(100% - 16px);
+      padding: 4px 10px;
+      border: 2px solid rgba(255, 255, 255, .18);
+      border-radius: 12px;
+      background: rgba(24, 6, 68, .82);
+      color: var(--text);
+      font-size: 11px;
+      line-height: 1.3;
+      text-shadow: 0 1px 0 rgba(30, 8, 92, .55);
+      white-space: pre-line;
+      pointer-events: none;
     }
 
     .copyright {
@@ -270,13 +287,15 @@
         <button data-place="nearby">Place range</button>
       </div>
       <button data-map-toggle>Refresh map</button>
-      <div id="map-panel" class="map-card">
-        <iframe id="map-frame" title="Round map" loading="eager" fetchpriority="high"></iframe>
+      <div id="map-panel" class="map-card" hidden>
+        <div id="round-map"></div>
+        <div id="opp-note" hidden></div>
       </div>
       <footer class="copyright">©<span id="copyright-year"></span></footer>
       <div id="status"></div>
     </div>
   </div>
+  <script src="tilemap.js"></script>
   <script src="popup.js"></script>
 </body>
 

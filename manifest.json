@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PNJ GeoGuessr Tools",
-  "version": "2.0.72",
+  "version": "2.0.80",
   "description": "PNJ GeoGuessr Tools.",
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; frame-src https://www.google.com https://maps.google.com;"
@@ -42,7 +42,7 @@
         "https://geoguessr.com/*",
         "https://*.geoguessr.com/*"
       ],
-      "js": ["internal.js"],
+      "js": ["tilemap.js", "internal.js"],
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": true,

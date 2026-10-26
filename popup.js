@@ -5,12 +5,16 @@ const nearbyMax = document.getElementById("nearby-max");
 const nearbyValMin = document.getElementById("nearby-val-min");
 const nearbyValMax = document.getElementById("nearby-val-max");
 const mapPanel = document.getElementById("map-panel");
-const mapFrame = document.getElementById("map-frame");
+const roundMapElement = document.getElementById("round-map");
+const opponentNote = document.getElementById("opp-note");
 const copyrightYear = document.getElementById("copyright-year");
 const allowedPage = /^(https?:\/\/((localhost|127\.0\.0\.1)(:\d+)?|([^/]+\.)?geoguessr\.com)\/|file:\/\/)/;
 const targetTabId = Number(new URLSearchParams(location.search).get("targetTabId"));
+const PAGE_SCRIPTS = ["tilemap.js", "internal.js"];
 let draggedRangeHandle;
-let lastMapKey = "";
+let roundMap = null;
+let roundAnswer = null;
+let opponentView = null;
 
 async function activeTab() {
   if (Number.isInteger(targetTabId) && targetTabId > 0) {
@@ -21,10 +25,10 @@ async function activeTab() {
   return tab;
 }
 
-async function inject(tab, file, world) {
+async function inject(tab, files, world) {
   await chrome.scripting.executeScript({
     target: { tabId: tab.id, allFrames: true },
-    files: [file],
+    files,
     world,
   });
 }
@@ -114,10 +118,6 @@ function nearestRangeHandle(score) {
     : nearbyMax;
 }
 
-function mapUrl(lat, lng) {
-  return `https://maps.google.com/maps?q=${lat},${lng}&z=6&output=embed`;
-}
-
 async function pushScoreRange() {
   const tab = await activeTab();
   if (!tab?.id || !allowedPage.test(tab.url || "")) return;
@@ -177,16 +177,35 @@ async function pullScoreRange() {
   updateNearbyValue();
 }
 
+function mountRoundMap() {
+  roundMap?.destroy();
+  roundMap = window.__pnjTileMap.mount(roundMapElement);
+}
+
+function viewOrNull(view) {
+  return Array.isArray(view?.opponents) ? view : null;
+}
+
+function renderMap() {
+  const { markers, note } = window.__pnjTileMap.markersFor(roundAnswer, opponentView);
+  // Shown before setMarkers so the map measures a real size and fits at once.
+  mapPanel.hidden = !roundAnswer && !opponentView?.opponents.length;
+  roundMap.setMarkers(markers);
+  opponentNote.textContent = note;
+  opponentNote.hidden = !note;
+}
+
 function setMapCoord(coord) {
   if (typeof coord?.lat !== "number" || typeof coord?.lng !== "number") return;
 
-  const mapKey = `${coord.lat},${coord.lng}`;
-  if (mapKey !== lastMapKey) {
-    mapFrame.src = mapUrl(coord.lat, coord.lng);
-    lastMapKey = mapKey;
-  }
-  mapPanel.hidden = false;
+  roundAnswer = coord;
+  renderMap();
   statusBox.textContent = "";
+}
+
+function setOpponentView(view) {
+  opponentView = viewOrNull(view);
+  renderMap();
 }
 
 async function currentRound() {
@@ -199,7 +218,7 @@ async function currentRound() {
 
   let pickedStatus = pickStatusResult(await statusResults(tab));
   if (!pickedStatus?.result?.ready) {
-    await inject(tab, "internal.js", "MAIN");
+    await inject(tab, PAGE_SCRIPTS, "MAIN");
     pickedStatus = pickStatusResult(await statusResults(tab));
   }
 
@@ -252,6 +271,8 @@ async function openMapInPopup() {
   }
   if (!data?.current) return;
 
+  mountRoundMap();
+  opponentView = viewOrNull(data.opponents);
   setMapCoord(data.current);
 }
 
@@ -293,7 +314,7 @@ async function copyUserId() {
     return;
   }
 
-  await inject(tab, "internal.js", "MAIN");
+  await inject(tab, PAGE_SCRIPTS, "MAIN");
   const [result] = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     world: "MAIN",
@@ -414,6 +435,11 @@ if (nearbySlider && nearbyMin && nearbyMax) {
   });
 }
 
+const PAGE_RELAYS = {
+  "pnj-location": (message) => setMapCoord(message.coord),
+  "pnj-opponent": (message) => setOpponentView(message.view),
+};
+
 chrome.runtime.onMessage.addListener((message, sender) => {
   if (message?.type === "pnj-close-panel") {
     if (!message.tabId || message.tabId === targetTabId || !targetTabId) {
@@ -422,22 +448,24 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     return;
   }
 
-  if (message?.type !== "pnj-location") return;
+  const apply = PAGE_RELAYS[message?.type];
+  if (!apply) return;
   if (Number.isInteger(targetTabId) && targetTabId > 0 && sender.tab?.id !== targetTabId) return;
 
   if (targetTabId > 0) {
-    setMapCoord(message.coord);
+    apply(message);
     return;
   }
 
   activeTab()
     .then((tab) => {
-      if (tab?.id === sender.tab?.id) setMapCoord(message.coord);
+      if (tab?.id === sender.tab?.id) apply(message);
     })
     .catch(() => { });
 });
 
 updateNearbyValue();
+mountRoundMap();
 if (copyrightYear) copyrightYear.textContent = new Date().getFullYear();
 hidePagePanel().catch(() => { });
 openMapInPopup().catch(() => { });
