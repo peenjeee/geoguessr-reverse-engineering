@@ -17,7 +17,7 @@ cd geoguessr-reverse-engineering
 - **Place exact**: Drop the pin on the captured round location.
 - **Place range**: Choose a score range (0 - 5000) and place close enough.
 - **Opponent guess (Duels / Team Duels)**: Shows the moment the opponent guesses, then draws their guess next to the round answer on the same map, with distance and estimated score, once GeoGuessr reveals it at the end of the round. Ranked duels never send an opponent's unsubmitted pin; if GeoGuessr streams one (`LiveStreamSamples`), it is drawn live too. Also sent to the web resolver as `opponent_update`, with positional ids only.
-- **MapLibre GL / MapCN Engine**: Smooth light vector map preview.
+- **Round map**: Google Maps tiles drawn by the bundled `tilemap.js`, with the answer pin, smooth zoom and drag. The userscript and the web resolver show the same map.
 - **Browser side panel**: For normal Chrome/Brave tabs.
 - **In-page PWA launcher**: Fallback for installed GeoGuessr PWA windows.
 - **Panel hotkey**: Press `Insert` to open or close the browser side panel. In PWA mode, press `Delete` to show or hide the in-page panel.
